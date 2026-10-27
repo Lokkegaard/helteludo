@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 44.
+- Filen `helteludo.html` i denne mappe er identisk med version 45.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -212,3 +212,9 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - Kameraet drejer først videre, når den forrige brik er færdig med at gå. Følg-turen-tjekket ligger nu efter `renderTokens`, som starter gåturen; før lå det foran og startede kameraet samtidig med gåturen. Efter brikken er stoppet, er der en pause på 0,45 s (`UI.animEndAt`, `V3D.camPending`).
 - Et computerhold slår først, når kameraet er færdigt med at dreje hen til det, plus 0,3 s (`schedule`: venter på `V3D.camPending` og `V3D.camAnim`).
 - Målt forløb ved normal fart: brikken går → 0,47 s pause → kameraet drejer 1,45 s → 0,75 s → computeren slår.
+
+## GitHub og GitHub Pages (version 45)
+- Projektet ligger offentligt på https://github.com/Lokkegaard/helteludo (gren `main`) og kan spilles på https://lokkegaard.github.io/helteludo/.
+- `index.html` sender videre til `helteludo.html`. `helteludo.html` har nu selv `<meta charset>` og `<meta viewport>` øverst, fordi GitHub Pages ikke tilføjer dem, som artefakt-visningen gør.
+- Online-spil kræver claude.ai's runtime (`window.claude`) og virker kun i artefaktet. På GitHub Pages virker spil på samme skærm og mod computeren.
+- Efter en ændring: publicér artefaktet som før, og skub derefter til GitHub (`git commit` + `git push`). Pages bygger selv siden igen.
