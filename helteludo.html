@@ -1593,7 +1593,6 @@ function renderLocal(){
     <div class="seg" role="group" aria-label="Antal hold">${[2,3,4].map(n=>`<button class="${R.n===n?'on':''}" data-act="n" data-n="${n}" aria-pressed="${R.n===n}">${n} hold</button>`).join('')}</div>
     <button class="btn ghost" data-act="rules">Evner og regler</button>
     <button class="btn ghost" data-act="heltebog">Heltebog og turnering</button>
-    <button class="btn ghost" data-act="spritedemo">Prøv tegnede figurer</button>
     <span class="spacer"></span>
     <button class="btn big" data-act="quick" ${seats.some(s=>R.seats[s].log.some(e=>e.pending))?'disabled':''} title="Hold, der ikke har rullet deres evner, ruller automatisk">⚡ Hurtigt spil</button>
     <button class="btn primary big" data-act="start" ${ready?'':'disabled'}>Start spillet</button>
@@ -3661,15 +3660,6 @@ document.addEventListener('click',e=>{
       else UI.viewMsg='';
       break}
     case 'figstyle': UI.figStyle=UI.figStyle==='tegnet'?'3d':'tegnet'; try{localStorage.setItem('helteludo.figurer',UI.figStyle)}catch(e){} break;
-    case 'spritedemo': {
-      // Et prøvespil med otte tilfældige arter, så de tegnede figurer kan ses.
-      const seats=[0,2], kinds=KINDS.map(k=>k.id).sort(()=>Math.random()-.5);
-      seats.forEach(s=>{const rs=R.seats[s]; if(!rs.rolled) rollSeat(rs,true)}); saveRoster(); unsubGame();
-      newGame(seats.map((s,ti)=>({seat:s,...teamData(R.seats[s]),pieces:teamData(R.seats[s]).pieces.map((pp,i)=>({...pp,kind:kinds[ti*4+i]})),ai:ti===1,uid:null})),R.opts);
-      UI.figStyle='tegnet'; UI.view='3d'; try{localStorage.setItem('helteludo.figurer','tegnet'); localStorage.setItem('helteludo.visning','3d')}catch(e){}
-      UI.screen='game'; app.innerHTML='';
-      if(!has3D()){UI.viewMsg='Henter 3D…'; load3D().then(ok=>{UI.viewMsg=ok?'':'3D kunne ikke hentes. Tjek forbindelsen.'; if(!ok) UI.view='2d'; render()})}
-      break}
     case 'gfx': UI.gfx={auto:'hoj',hoj:'lav',lav:'auto'}[UI.gfx]; try{localStorage.setItem('helteludo.grafik',UI.gfx)}catch(e){} if(V3D.active){V3D.applyQuality(UI.gfx==='lav'?'lav':'hoj'); V3D.fps=UI.gfx==='auto'?{t0:performance.now(),n:0}:null} UI.viewMsg=''; break;
     case 'music': MUSIC.on=!MUSIC.on; try{localStorage.setItem('helteludo.musik',MUSIC.on?'1':'0')}catch(e){} if(MUSIC.on){const c=actx(); if(c) c.resume().then(musicStart).catch(()=>{})} else musicStop(); break;
     case 'speed': UI.speed={langsom:'normal',normal:'hurtig',hurtig:'langsom'}[UI.speed]; try{localStorage.setItem('helteludo.tempo',UI.speed)}catch(e){} break;

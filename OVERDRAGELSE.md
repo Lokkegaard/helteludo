@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 45.
+- Filen `helteludo.html` i denne mappe er identisk med version 46.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -28,7 +28,7 @@ sej/kampivrig/kommandosoldat→dværg · stifinder/globetrotter/booster→elver 
 - **Alle 16 arter har nu AI-tegninger** fra Canva i samme stil (blæk + akvarel). Originalerne i fuld størrelse, fritlagt, ligger i `tegninger/` (`<art>.png`, 944×1680 eller 1024×1536); `tegninger/hvid/` har de 13 nye med hvid baggrund.
 - I `SPRITES` ligger de som WebP (640 px høje, ~60 KB hver). Felter: `h` (højde i 3D), `hand` ([afstand fra midten i bredder, højde fra bunden]) til udstyret, `aspect`.
 - **Tegnede figurer er nu standard** (`UI.figStyle` falder tilbage til `'tegnet'`); et gemt valg i `localStorage` `helteludo.figurer` vinder stadig. Knappen "Figurer: tegnede / 3D" skifter.
-- "Prøv tegnede figurer" starter et demospil med otte tilfældige arter.
+- "Prøv tegnede figurer" (et demospil med otte tilfældige arter) er fjernet i version 46.
 - `buildSprite(p)`: papfigur på fod med holdring, skygge, vender mod kameraet, vralter/hopper.
 - **Version 21: tegnede figurer har intet 3D-udstyr.** I stedet viser `dressBadges(p,rig)` evnerne som malede mærker (`BADGES`, 128 px WebP, ét pr. evne, alle 35) i en bue foran foden; skivens farve følger tabellen (pergament/grå/guld), og niveau ≥2 får romertal (`badgeTexture`). Infopanelet viser mærket ved hver evne i tegnet stil og teksten "På 3D-figuren …" kun i 3D-stil. 3D-figurerne har stadig `dressPiece`-udstyr. Mærkerne ligger også i `tegninger/evner/`.
 - Hent fra Canva: kun forhåndsvisninger via API; fuld størrelse hentes via Chrome (logget ind) med "…" → Download på `canva.com/M/<id>`.
@@ -218,3 +218,6 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - `index.html` sender videre til `helteludo.html`. `helteludo.html` har nu selv `<meta charset>` og `<meta viewport>` øverst, fordi GitHub Pages ikke tilføjer dem, som artefakt-visningen gør.
 - Online-spil kræver claude.ai's runtime (`window.claude`) og virker kun i artefaktet. På GitHub Pages virker spil på samme skærm og mod computeren.
 - Efter en ændring: publicér artefaktet som før, og skub derefter til GitHub (`git commit` + `git push`). Pages bygger selv siden igen.
+
+## Knappen »Prøv tegnede figurer« er fjernet (version 46)
+- Knappen på opstillingen og dens handling (`spritedemo`) er fjernet. Man vælger stadig figurstil i 3D under ☰ Menu (»Figurer: tegnede/3D«).
