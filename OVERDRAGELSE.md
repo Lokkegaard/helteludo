@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 46.
+- Filen `helteludo.html` i denne mappe er identisk med version 47.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -221,3 +221,6 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 
 ## Knappen »Prøv tegnede figurer« er fjernet (version 46)
 - Knappen på opstillingen og dens handling (`spritedemo`) er fjernet. Man vælger stadig figurstil i 3D under ☰ Menu (»Figurer: tegnede/3D«).
+
+## 3D er standardvisningen (version 47)
+- `UI.view` starter i 3D, medmindre spilleren selv har valgt 2D. Valget gemmes nu i `helteludo.visning2`; den gamle nøgle `helteludo.visning` ignoreres, så alle starter i 3D én gang. 3D-biblioteket hentes ved opstart (`start`). Kan 3D ikke starte (ingen WebGL eller intet net), falder spillet tilbage til 2D som før.
