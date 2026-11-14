@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 51.
+- Filen `helteludo.html` i denne mappe er identisk med version 52.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -292,3 +292,18 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
   - »Afbryd spillet« hedder nu »Gem og gå til opstillingen« og gemmer i stedet for at slette.
   - Opstillingen viser listen »Gemte spil« med hold, tidspunkt, brikker i mål og tur, og knapperne »Fortsæt« og »Slet« (slet kræver et klik mere). Et afsluttet spil fjernes.
 - **Online, vend tilbage fra en anden enhed:** uden for claude.ai hører en plads til browserens spiller-id. Skriver man samme navn på en ny enhed, viser listen over spil i gang »Fortsæt som NAVN«. `claimSeat` flytter pladsen (og værtsrollen) til det nye id og øger `rev`, så alle skærme opdaterer. Spil i gang vises i listen i 48 timer (før 12).
+
+## Evnerne slås i starten af spillet (version 52)
+- På opstillingen fordeler et nyt hold stadig sine 6 slag på brikkerne, men der er ingen »Rul«-knap. »Start spillet« kan trykkes, når slagene er fordelt (eller holdet allerede har evner). Computerhold og »Hurtigt spil« bruger 2-2-1-1, hvis intet er fordelt.
+- `newGame` tager `heroRolls` (slag pr. brik) for hold uden evner og bygger køen `S.heroQ`. Spillet starter i fasen `heroes`:
+  - Holdene slår ét slag ad gangen med bægeret (`heroRoll`, også mellemrum). Computeren slår selv (`aiStep`).
+  - De to terninger fra Heltetabellen vises i bakken (`S.heroDice`), og den nye evne vises som et kort med mærke ved brikken.
+  - »Vælg selv en evne« giver en rulleliste på sedlen (`S.heroPick`, `heroChoose`); computeren vælger selv (`autoValg`).
+  - Den første evne bestemmer brikkens art (`ABIL_KIND`). Forbandet og Ærkefjende får deres øjental og hold med det samme (`heroGain`).
+  - Når køen er tom, begynder første tur (`startTurn(0)`).
+- Evnerne gemmes på holdet (`R.seats`) på den skærm, der styrer holdet. Online gælder det kun ens eget hold; computerhold online er nye hver gang. Når holdet har slået alt, sættes `rolled` (`heroDone`).
+- Online: `myTeam`/`aiTeam` slår ikke længere evner i lobbyen; de sender `heroRolls` med, og hver spiller slår for sit eget hold i spillet.
+- Testet:
+  - Lokalt: menneskehold med bægeret, inkl. »Vælg selv«, og computerhold.
+  - Online via serveren med en computerspiller.
+  - 3.600 slag på Heltetabellen gav alle 36 kombinationer jævnt.
