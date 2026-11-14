@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 47.
+- Filen `helteludo.html` i denne mappe er identisk med version 48.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -216,7 +216,7 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 ## GitHub og GitHub Pages (version 45)
 - Projektet ligger offentligt på https://github.com/Lokkegaard/helteludo (gren `main`) og kan spilles på https://lokkegaard.github.io/helteludo/.
 - `index.html` sender videre til `helteludo.html`. `helteludo.html` har nu selv `<meta charset>` og `<meta viewport>` øverst, fordi GitHub Pages ikke tilføjer dem, som artefakt-visningen gør.
-- Online-spil kræver claude.ai's runtime (`window.claude`) og virker kun i artefaktet. På GitHub Pages virker spil på samme skærm og mod computeren.
+- Online-spil: i artefaktet bruges claude.ai's database; uden for claude.ai (GitHub Pages) bruges direkte forbindelse mellem browserne (version 48).
 - Efter en ændring: publicér artefaktet som før, og skub derefter til GitHub (`git commit` + `git push`). Pages bygger selv siden igen.
 
 ## Knappen »Prøv tegnede figurer« er fjernet (version 46)
@@ -224,3 +224,19 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 
 ## 3D er standardvisningen (version 47)
 - `UI.view` starter i 3D, medmindre spilleren selv har valgt 2D. Valget gemmes nu i `helteludo.visning2`; den gamle nøgle `helteludo.visning` ignoreres, så alle starter i 3D én gang. 3D-biblioteket hentes ved opstart (`start`). Kan 3D ikke starte (ingen WebGL eller intet net), falder spillet tilbage til 2D som før.
+
+## Online-spil uden claude.ai: direkte forbindelse (version 48)
+- Uden `window.claude` (fx på GitHub Pages) sætter `connect()` `NET.p2p=true` og bruger `P2PDB`/`P2PUSER` i stedet for claude.ai's database og brugere. Resten af online-koden er uændret (`withLock`, `commit`, `subscribeGame`, `createGame`, `joinGame`, `startOnline` …).
+- **Værten** (den, der opretter spillet) holder spillets dokumenter i browseren (`hostSession`) og registrerer sig hos PeerJS' gratis offentlige server med id `helteludo-v1-KODE`.
+  - Værtens kopi implementerer `get/set/delete/acquire/onSnapshot` for dokumenter og `onSnapshot` for samlinger (`games/KODE/seen`).
+  - Låse har TTL og frigives ved `set`.
+  - Dokumenterne gemmes i `localStorage` (`helteludo.vaert.KODE`), så værten kan genindlæse siden midt i spillet: id'et genregistreres (op til 8 forsøg med 2,5 s imellem), og spillet fortsætter. Data over to døgn ryddes op.
+- **Medspillere** (`clientSession`) kobler sig til værtens id og sender alle kald dertil (`req`/`res`) og abonnementer (`sub`/`snap`/`unsub`). Falder forbindelsen ud, forsøges der igen hvert 3. sekund i et minut.
+- Spiller-id gemmes i `helteludo.uid` og spillerens navn i `helteludo.navn` (feltet »Dit navn« på online-fanen). Navnene står i spillets dokument (`hostName` og `seats[s].name`), fordi der ingen fælles brugerliste er.
+- Der er ingen liste over åbne spil. I lobbyen viser værten koden og et link (`?spil=KODE`), som åbner online-fanen med koden udfyldt. Der er en »Kopiér link«-knap.
+- Begrænsninger:
+  - Værten skal have siden åben, mens der spilles.
+  - Forbindelsen bruger PeerJS' standard-STUN uden TURN-server, så enkelte skole- og firmanetværk kan blokere den.
+  - To faner i samme browser deler spiller-id.
+- Testet med to faner på hver sin adresse (127.0.0.1 og localhost): oprettelse, deltagelse via link, start, 21 ture på skift, værten genindlæste midt i spillet (medspilleren var forbundet igen efter 0,3 s), og en forkert kode gav en besked.
+- I artefaktet på claude.ai bruges stadig claude.ai's database; dér er WebRTC ikke tilladt.

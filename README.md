@@ -15,4 +15,4 @@ Bygget efter reglerne af Mette Finderup og Kristoffer Apollo.
 
 ## Online-spil
 
-Online-spil mellem flere enheder bruger claude.ai's artefakt-runtime og virker kun der. På GitHub Pages kan man spille på samme skærm og mod computeren.
+Vælg **Online**, skriv dit navn og opret et spil. Send koden eller linket til de andre, så de kan deltage fra deres egen enhed. Spillet kører i værtens browser, og de andre forbinder sig direkte til værten (via PeerJS), så værten skal have siden åben, mens I spiller. Enkelte skole- og firmanetværk kan blokere den direkte forbindelse.

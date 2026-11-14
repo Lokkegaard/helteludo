@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Helteludo</title>
@@ -1346,6 +1347,136 @@ function saveGame(){if(!S||isOnline()) return; try{localStorage.setItem(SAVE_KEY
 function savedGame(){try{const j=JSON.parse(localStorage.getItem(SAVE_KEY)); return j&&j.S&&!j.S.over?j:null}catch(e){return null}}
 function clearSave(){try{localStorage.removeItem(SAVE_KEY)}catch(e){}}
 
+/* ---------- Online uden claude.ai: direkte forbindelse mellem browserne (PeerJS) ---------- */
+// Uden for claude.ai (fx på GitHub Pages) er der ingen fælles database. I stedet holder værtens browser spillets
+// dokumenter og efterligner den lille db-API, som online-koden bruger: doc(sti).get/set/delete/acquire/onSnapshot og
+// collection(sti).onSnapshot. De andre browsere kobler sig på værten med spilkoden (PeerJS-id 'helteludo-v1-KODE')
+// og sender deres kald dertil. Værtens dokumenter gemmes i browseren, så spillet overlever en genindlæsning.
+const PEER_SRC='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+const P2P={sessions:{}, me:null, loading:null};
+const peerId=code=>'helteludo-v1-'+code;
+const HOSTKEY=code=>'helteludo.vaert.'+code;
+function loadPeer(){if(window.Peer) return Promise.resolve(true); if(!P2P.loading) P2P.loading=loadScript(PEER_SRC).then(()=>!!window.Peer,()=>{P2P.loading=null; return false}); return P2P.loading}
+const parentOf=p=>p.split('/').slice(0,-1).join('/');
+const docSnap=(exists,data)=>({exists, data:()=>clone(data)});
+function savedHost(code){try{const v=JSON.parse(localStorage.getItem(HOSTKEY(code))||'null'); return v&&v.uid===NET.uid?v:null}catch(e){return null}}
+// Gamle værtsdata (over to døgn) ryddes op.
+try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i); if(k&&k.startsWith('helteludo.vaert.')){const v=JSON.parse(localStorage.getItem(k)||'{}'); if(!v.t||Date.now()-v.t>2*86400e3) localStorage.removeItem(k)}}}catch(e){}
+function newPeer(id){
+  return new Promise((res,rej)=>{
+    const p=id?new Peer(id,{debug:0}):new Peer({debug:0}); let done=false;
+    p.on('open',()=>{done=true; res(p)});
+    p.on('error',e=>{if(!done){done=true; try{p.destroy()}catch(_){} rej(e)}});
+    p.on('disconnected',()=>{if(!p.destroyed) setTimeout(()=>{try{p.reconnect()}catch(_){}},1500)});
+  });
+}
+// Værten: dokumenterne ligger her, og alle kald (også de andres) går igennem den samme kø.
+function hostSession(code,entries){
+  const H={code, host:true, store:new Map(entries||[]), locks:{}, subs:new Set(), peer:null};
+  const persist=()=>{try{if(H.store.has('games/'+code)) localStorage.setItem(HOSTKEY(code),JSON.stringify({uid:NET.uid,t:Date.now(),entries:[...H.store]})); else localStorage.removeItem(HOSTKEY(code))}catch(e){}};
+  const snapOf=(path,coll)=>coll?{docs:[...H.store].filter(([k])=>parentOf(k)===path).map(([k,v])=>({id:k.split('/').pop(),data:()=>clone(v)}))}:docSnap(H.store.has(path),H.store.get(path));
+  const wire=(path,coll)=>coll?{coll:true,docs:[...H.store].filter(([k])=>parentOf(k)===path).map(([k,v])=>[k.split('/').pop(),v])}:{exists:H.store.has(path),data:H.store.get(path)};
+  const notify=path=>setTimeout(()=>H.subs.forEach(u=>{if(u.coll?parentOf(path)!==u.path:u.path!==path) return;
+    if(u.conn){try{u.conn.send({t:'snap',subId:u.subId,v:wire(u.path,u.coll)})}catch(e){}} else u.cb(snapOf(u.path,u.coll))}),0);
+  H.get=async path=>docSnap(H.store.has(path),H.store.get(path));
+  H.set=async(path,d)=>{H.store.set(path,clone(d)); delete H.locks[path]; if(path==='games/'+code||!path.includes('/seen/')) persist(); notify(path)};
+  H.del=async path=>{H.store.delete(path); delete H.locks[path]; persist(); notify(path)};
+  H.acquire=async(path,o)=>{const l=H.locks[path], now=Date.now(); if(!l||l.until<now||l.holder===o.holder){H.locks[path]={holder:o.holder,until:now+(o.ttlMs||5000)}; return {acquired:true}} return {acquired:false}};
+  H.sub=(path,coll,cb)=>{const u={path,coll,cb}; H.subs.add(u); setTimeout(()=>{if(H.subs.has(u)) cb(snapOf(path,coll))},0); return ()=>H.subs.delete(u)};
+  H.serve=conn=>{
+    conn.on('data',async m=>{
+      if(!m||typeof m!=='object') return;
+      if(m.t==='req'){let val=null,err=null; try{val=m.op==='get'?await H.get(m.path):m.op==='set'?await H.set(m.path,m.data):m.op==='delete'?await H.del(m.path):await H.acquire(m.path,m)}catch(e){err=String(e)}
+        if(m.op==='get'&&val) val={exists:val.exists,data:H.store.get(m.path)};
+        try{conn.send({t:'res',id:m.id,val,err})}catch(e){}}
+      if(m.t==='sub'){const u={path:m.path,coll:!!m.coll,conn,subId:m.subId}; H.subs.add(u); try{conn.send({t:'snap',subId:m.subId,v:wire(m.path,!!m.coll)})}catch(e){}}
+      if(m.t==='unsub') H.subs.forEach(u=>{if(u.conn===conn&&u.subId===m.subId) H.subs.delete(u)});
+    });
+    conn.on('close',()=>H.subs.forEach(u=>{if(u.conn===conn) H.subs.delete(u)}));
+  };
+  H.ready=(async()=>{
+    if(!(await loadPeer())) throw new Error('peerjs');
+    // Id'et kan være optaget et øjeblik efter en genindlæsning; prøv igen et par gange.
+    for(let i=0;i<8;i++){try{H.peer=await newPeer(peerId(code)); break}catch(e){if(e&&e.type==='unavailable-id'&&i<7){await sleep(2500); continue} throw e}}
+    H.peer.on('connection',conn=>H.serve(conn));
+    return H;
+  })();
+  persist();
+  return H;
+}
+// Medspiller: alle kald sendes til værten; forbindelsen genoprettes, hvis den falder ud.
+function clientSession(code){
+  const C={code, host:false, conn:null, pending:new Map(), subs:new Map(), seq:0, gone:false};
+  const fromWire=v=>v.coll?{docs:v.docs.map(([id,d])=>({id,data:()=>clone(d)}))}:docSnap(v.exists,v.data);
+  let opening=null;
+  C.open=()=>{if(opening) return opening; opening=(async()=>{
+    if(!(await loadPeer())) throw new Error('peerjs');
+    if(!P2P.me||P2P.me.destroyed) P2P.me=await newPeer();
+    const conn=await new Promise((res,rej)=>{
+      const c=P2P.me.connect(peerId(code),{reliable:true}), t=setTimeout(()=>rej(new Error('timeout')),12000);
+      const onErr=e=>{if(e&&e.type==='peer-unavailable'&&String(e.message||'').includes(peerId(code))){clearTimeout(t); P2P.me.off('error',onErr); rej(Object.assign(new Error('nogame'),{nogame:true}))}};
+      P2P.me.on('error',onErr);
+      c.on('open',()=>{clearTimeout(t); P2P.me.off('error',onErr); res(c)});
+    });
+    C.conn=conn;
+    conn.on('data',m=>{if(!m||typeof m!=='object') return;
+      if(m.t==='res'){const p=C.pending.get(m.id); if(p){C.pending.delete(m.id); m.err?p.rej(new Error(m.err)):p.res(m.val)}}
+      if(m.t==='snap'){const u=C.subs.get(m.subId); if(u) u.cb(fromWire(m.v))}});
+    conn.on('close',()=>{C.conn=null; opening=null; C.pending.forEach(p=>p.rej(new Error('closed'))); C.pending.clear(); if(!C.gone) C.retry()});
+    C.subs.forEach((u,subId)=>{conn.send({t:'sub',subId,path:u.path,coll:u.coll}); u.sent=conn});
+    return C;
+  })(); opening.catch(()=>{opening=null}); return opening};
+  // Værten er væk: prøv igen i et minut, og meld derefter forbindelsen tabt.
+  C.retry=()=>{const t0=Date.now(); const go=()=>{if(C.gone||C.conn) return; C.open().catch(()=>{if(Date.now()-t0<60000) setTimeout(go,3000); else C.subs.forEach(u=>u.err&&u.err(new Error('lost')))})}; setTimeout(go,1500)};
+  const req=async(op,path,extra)=>{
+    try{await C.open()}catch(e){if(e&&e.nogame){if(op==='get') return docSnap(false,null); if(op==='acquire') return {acquired:true}} throw e}
+    const id=++C.seq, val=await new Promise((res,rej)=>{C.pending.set(id,{res,rej}); C.conn.send({t:'req',id,op,path,...extra}); setTimeout(()=>{if(C.pending.has(id)){C.pending.delete(id); rej(new Error('timeout'))}},10000)});
+    return op==='get'?docSnap(val.exists,val.data):val;
+  };
+  C.get=path=>req('get',path); C.set=(path,data)=>req('set',path,{data}); C.del=path=>req('delete',path);
+  C.acquire=(path,o)=>req('acquire',path,{holder:o.holder,ttlMs:o.ttlMs});
+  C.sub=(path,coll,cb,err)=>{const subId=++C.seq, u={path,coll,cb,err}; C.subs.set(subId,u);
+    C.open().then(()=>{if(C.subs.has(subId)&&C.conn&&u.sent!==C.conn){C.conn.send({t:'sub',subId,path,coll}); u.sent=C.conn}}).catch(e=>{if(e&&e.nogame) cb(coll?{docs:[]}:docSnap(false,null)); else if(C.subs.has(subId)) C.retry()});
+    return ()=>{C.subs.delete(subId); try{C.conn&&C.conn.send({t:'unsub',subId})}catch(e){}}};
+  C.ready=Promise.resolve(C);
+  return C;
+}
+// Hvilken forbindelse et spil bruger: værtens egen (ny eller gemt fra før en genindlæsning) eller en medspillers.
+function sessFor(code,created){
+  let sess=P2P.sessions[code];
+  if(!sess){
+    const saved=savedHost(code);
+    if(created&&created.host===NET.uid) sess=hostSession(code,[]);
+    else if(saved) sess=hostSession(code,saved.entries);
+    else sess=clientSession(code);
+    P2P.sessions[code]=sess;
+    if(sess.host) sess.ready.catch(()=>{if(P2P.sessions[code]===sess) delete P2P.sessions[code]});
+  }
+  return sess.ready;
+}
+const codeOf=path=>path.split('/')[1];
+const P2PDB={
+  doc(path){const code=codeOf(path); return {
+    get:()=>sessFor(code).then(s=>s.get(path)),
+    set:d=>sessFor(code,path==='games/'+code?d:null).then(s=>s.set(path,d)),
+    delete:()=>sessFor(code).then(s=>s.del(path)),
+    acquire:o=>sessFor(code).then(s=>s.acquire(path,o)),
+    onSnapshot:(cb,err)=>{let un=null,dead=false; sessFor(code).then(s=>{if(!dead) un=s.sub(path,false,cb,err)}).catch(e=>err&&err(e)); return ()=>{dead=true; un&&un()}}
+  }},
+  collection(path){
+    // Der er ingen fælles liste over spil: man får koden af værten.
+    if(path==='games') return {where:()=>({limit:()=>({onSnapshot:cb=>{cb({docs:[]}); return ()=>{}}})})};
+    const code=codeOf(path);
+    return {onSnapshot:(cb,err)=>{let un=null,dead=false; sessFor(code).then(s=>{if(!dead) un=s.sub(path,true,cb,err)}).catch(e=>err&&err(e)); return ()=>{dead=true; un&&un()}}};
+  }
+};
+// Spillernes navne står i spillets dokument (værtens navn og hver plads), fordi der ikke er nogen fælles brugerliste.
+const P2PUSER={
+  id:async()=>NET.uid, can:async()=>true,
+  profiles:async ids=>{const d=UI.online&&UI.online.doc, out={}; ids.forEach(id=>{let n=d&&d.host===id?d.hostName:null; Object.values((d&&d.seats)||{}).forEach(x=>{if(x.uid===id&&x.name) n=x.name}); out[id]={name:n||'Spiller'}}); return out}
+};
+function p2pId(){try{let u=localStorage.getItem('helteludo.uid'); if(!u){u='p'+Math.random().toString(36).slice(2,12); localStorage.setItem('helteludo.uid',u)} return u}catch(e){return 'p'+Math.random().toString(36).slice(2,12)}}
+
 /* ---------- Online: shared game document ---------- */
 async function withLock(ref,fn){
   for(let i=0;i<6;i++){
@@ -1407,7 +1538,7 @@ function subscribeGame(code,silent){
     if(d.status!=='lobby'&&d.state&&UI.screen!=='game'){UI.screen='game'; app.innerHTML=''}
     fetchNames([d.host,...Object.values(d.seats||{}).map(x=>x.uid)]);
     render();
-  },()=>{UI.onlineMsg='Forbindelsen til spillet blev afbrudt. Åbn spillet igen fra listen.'; render()});
+  },()=>{UI.onlineMsg=NET.p2p?'Forbindelsen til værten er tabt. Værten skal have spillet åbent.':'Forbindelsen til spillet blev afbrudt. Åbn spillet igen fra listen.'; render()});
 }
 function fetchNames(ids){
   ids=[...new Set(ids.filter(id=>id&&id!==NET.uid&&!UI.asked[id]))];
@@ -1435,10 +1566,10 @@ function aiTeam(s){const rs=freshSeat(s); rollSeat(rs,true); return teamData(rs)
 function newCode(){const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<5;i++) c+=A[Math.floor(Math.random()*A.length)]; return c}
 async function createGame(){
   const {n,mine,kinds}=UI.oc, seatsArr=SEAT_SETS[n], seats={};
-  seatsArr.forEach(s=>{seats[s]=s===mine?{kind:'human',uid:NET.uid,team:myTeam(s)}:kinds[s]==='ai'?{kind:'ai',team:aiTeam(s)}:{kind:'open'}});
+  seatsArr.forEach(s=>{seats[s]=s===mine?{kind:'human',uid:NET.uid,team:myTeam(s),name:NET.name||''}:kinds[s]==='ai'?{kind:'ai',team:aiTeam(s)}:{kind:'open'}});
   const code=newCode();
-  try{await NET.db.doc('games/'+code).set({code,host:NET.uid,n,status:'lobby',seats,opts:R.opts,created:Date.now(),updated:Date.now(),rev:0,state:null}); subscribeGame(code)}
-  catch(e){UI.onlineMsg=e&&e.code==='invalid_argument'?'Du har ikke adgang til at oprette spil. Ejeren skal dele siden med dig som Bidragyder.':'Spillet kunne ikke oprettes. Prøv igen.'}
+  try{await NET.db.doc('games/'+code).set({code,host:NET.uid,hostName:NET.name||'',n,status:'lobby',seats,opts:R.opts,created:Date.now(),updated:Date.now(),rev:0,state:null}); subscribeGame(code)}
+  catch(e){UI.onlineMsg=e&&e.code==='invalid_argument'?'Du har ikke adgang til at oprette spil. Ejeren skal dele siden med dig som Bidragyder.':NET.p2p?'Spillet kunne ikke oprettes. Tjek internetforbindelsen, og prøv igen.':'Spillet kunne ikke oprettes. Prøv igen.'}
   render();
 }
 async function joinGame(code,seat){
@@ -1453,11 +1584,11 @@ async function joinGame(code,seat){
       const free=Object.keys(d.seats).filter(k=>d.seats[k].kind==='open').map(Number);
       const s=seat!=null&&free.includes(seat)?seat:free[0];
       if(s==null){msg='Spillet er fuldt. Du kan se med.'; return null}
-      d.seats[s]={kind:'human',uid:NET.uid,team:myTeam(s)}; d.updated=Date.now(); return d;
+      d.seats[s]={kind:'human',uid:NET.uid,team:myTeam(s),name:NET.name||''}; d.updated=Date.now(); return d;
     });
     UI.onlineMsg=msg;
     if(!msg||msg.startsWith('Spillet er fuldt')) subscribeGame(code);
-  }catch(e){UI.onlineMsg='Kunne ikke deltage. Prøv igen.'}
+  }catch(e){UI.onlineMsg=NET.p2p?'Kunne ikke få forbindelse til værten. Tjek koden, og at værten har spillet åbent.':'Kunne ikke deltage. Prøv igen.'}
   render();
 }
 async function leaveLobby(){
@@ -1465,7 +1596,7 @@ async function leaveLobby(){
   const host=o.isHost, ref=o.ref;
   unsubGame();
   try{
-    if(host) await ref.delete();
+    if(host){await ref.delete(); try{localStorage.removeItem(HOSTKEY(o.code))}catch(e){}}
     else await withLock(ref,d=>{if(!d||d.status!=='lobby') return null; for(const k in d.seats) if(d.seats[k].uid===NET.uid) d.seats[k]={kind:'open'}; d.updated=Date.now(); return d});
   }catch(e){}
   render();
@@ -1627,6 +1758,7 @@ function renderOnline(){
   const o=UI.online;
   if(o&&o.doc&&o.doc.status==='lobby') return `<div class="online">${lobbyHtml(o.doc)}</div>`;
   if(o&&!o.doc) return `<div class="online"><div class="panel opanel"><p>Henter spillet…</p></div></div>`;
+  const nameField=NET.p2p?`<div class="field"><label class="eyebrow" for="pnamein">Dit navn</label><input id="pnamein" data-bind="pname" value="${esc(NET.name||'')}" maxlength="20" autocomplete="nickname" placeholder="Fx Henrik"></div>`:'';
   const ro=NET.canWrite===false?`<div class="note">Du har kun læseadgang til siden, så du kan se med, men ikke spille. Bed ejeren om at dele siden med dig som Bidragyder.</div>`:'';
   const {n,mine,kinds}=UI.oc, set=SEAT_SETS[n];
   const mineOk=set.includes(mine)?mine:set[0];
@@ -1638,7 +1770,7 @@ function renderOnline(){
   return `${msg?`<div style="margin-top:18px">${msg}</div>`:''}<div class="online">
     <section class="panel opanel">
       <h2>Opret et spil</h2>
-      ${ro}
+      ${ro}${nameField}
       <div class="field"><span class="eyebrow">Antal hold</span><div class="seg ink" role="group" aria-label="Antal hold">${[2,3,4].map(k=>`<button class="${n===k?'on':''}" data-act="ocn" data-n="${k}" aria-pressed="${n===k}">${k} hold</button>`).join('')}</div></div>
       <div class="field"><span class="eyebrow">Din farve</span><div class="colorpick">${set.map(s=>`<button class="${s===mineOk?'on':''}" style="${seatStyle(s)}" data-act="ocmine" data-s="${s}" aria-pressed="${s===mineOk}"><span class="sw"></span>${SEATS[s].name}</button>`).join('')}</div>
         <div style="font-size:13px"><b>Dit hold:</b> ${esc(myRs.name)} ${myRs.rolled?`<span class="chips" style="display:inline-flex;margin-top:4px">${myRs.pieces.map(p=>abilChips(p.abil)).join('')}</span>`:'<span class="muted">(evnerne rulles automatisk, når du går i gang)</span>'}</div></div>
@@ -1651,7 +1783,8 @@ function renderOnline(){
       <h2>Deltag i et spil</h2>
       <div class="field"><label class="eyebrow" for="codein">Spilkode</label><div class="codein"><input id="codein" data-bind="code" value="${esc(UI.codeInput)}" maxlength="5" autocomplete="off" placeholder="ABCDE"><button class="btn primary" data-act="joincode">Deltag</button></div></div>
       ${mineGames.length?`<div class="field"><span class="eyebrow">Dine spil</span><div class="glist">${mineGames.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">${g.status==='lobby'?'Venter på spillere':'I gang'}</span><button class="btn small primary" data-act="resume" data-code="${esc(g.code)}">Fortsæt</button></div>`).join('')}</div></div>`:''}
-      <div class="field"><span class="eyebrow">Åbne spil</span>${openGames.length?`<div class="glist">${openGames.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">Oprettet af ${esc(UI.names[g.host]||'en spiller')}</span>${Object.keys(g.seats).filter(k=>g.seats[k].kind==='open').map(k=>`<button class="btn small" style="${seatStyle(+k)}" data-act="join" data-code="${esc(g.code)}" data-s="${k}" ${NET.canWrite===false?'disabled':''}>Spil som ${SEATS[+k].name}</button>`).join('')}</div>`).join('')}</div>`:'<p class="muted">Ingen åbne spil lige nu. Opret et, og send koden til de andre.</p>'}</div>
+      ${NET.p2p?`<p class="muted small">Få koden eller et link af den, der har oprettet spillet. Spillet kører i værtens browser, så værten skal have siden åben, mens I spiller.</p>`:''}
+      ${NET.p2p?'':`<div class="field"><span class="eyebrow">Åbne spil</span>${openGames.length?`<div class="glist">${openGames.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">Oprettet af ${esc(UI.names[g.host]||'en spiller')}</span>${Object.keys(g.seats).filter(k=>g.seats[k].kind==='open').map(k=>`<button class="btn small" style="${seatStyle(+k)}" data-act="join" data-code="${esc(g.code)}" data-s="${k}" ${NET.canWrite===false?'disabled':''}>Spil som ${SEATS[+k].name}</button>`).join('')}</div>`).join('')}</div>`:'<p class="muted">Ingen åbne spil lige nu. Opret et, og send koden til de andre.</p>'}</div>`}
       ${watch.length?`<div class="field"><span class="eyebrow">Spil i gang</span><div class="glist">${watch.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">I gang</span><button class="btn small" data-act="resume" data-code="${esc(g.code)}">Se med</button></div>`).join('')}</div></div>`:''}
     </section></div>`;
 }
@@ -1662,7 +1795,9 @@ function lobbyHtml(d){
     ${UI.onlineMsg?`<div class="note err">${esc(UI.onlineMsg)}</div>`:''}
     <div class="eyebrow muted">Spilkode</div>
     <div class="bigcode">${esc(d.code)}</div>
-    <p>Send koden til de andre. De åbner denne side, vælger <b>Online</b> og skriver koden. Alle med adgang kan også se spillet i listen over åbne spil.</p>
+    ${NET.p2p?`<p>Send koden eller linket til de andre. De åbner siden, vælger <b>Online</b> og skriver koden.</p>
+    <div class="codein" style="margin-bottom:10px"><input readonly value="${esc(location.origin+location.pathname+'?spil='+d.code)}" aria-label="Link til spillet" onclick="this.select()"><button class="btn" data-act="copylink" data-link="${esc(location.origin+location.pathname+'?spil='+d.code)}">Kopiér link</button></div>
+    ${host?'<p class="muted small"><b>Lad denne side være åben, mens I spiller.</b> Spillet kører i din browser, og de andre er forbundet direkte til dig.</p>':''}`:'<p>Send koden til de andre. De åbner denne side, vælger <b>Online</b> og skriver koden. Alle med adgang kan også se spillet i listen over åbne spil.</p>'}
     <div>${seats.map(s=>{const x=d.seats[s]; return `<div class="seatrow" style="${seatStyle(s)}"><span class="badge">${SEATS[s].name[0]}</span>
       <div style="min-width:0"><div class="nm">${x.team?esc(x.team.name):SEATS[s].name+' hold'} ${x.uid===NET.uid?'<span class="tag me">Dig</span>':''}</div><div class="sub">${occ(x)}${x.uid===d.host?' · vært':''}</div>${x.team?`<div class="chips" style="margin-top:4px">${x.team.pieces.map(p=>abilChips(p.abil)).join('')}</div>`:''}</div>
       ${host&&x.uid!==NET.uid?`<button class="btn small" data-act="seatkind" data-s="${s}" data-v="${x.kind==='ai'?'open':'ai'}">${x.kind==='ai'?'Gør pladsen ledig':x.kind==='open'?'Fyld med computer':'Erstat med computer'}</button>`:'<span></span>'}</div>`}).join('')}</div>
@@ -3650,6 +3785,7 @@ document.addEventListener('click',e=>{
     case 'join': UI.onlineMsg=''; joinGame(b.dataset.code,+b.dataset.s); return;
     case 'resume': UI.onlineMsg=''; subscribeGame(b.dataset.code); break;
     case 'leave': leaveLobby(); return;
+    case 'copylink': {const l=b.dataset.link; try{navigator.clipboard.writeText(l).then(()=>{b.textContent='Kopieret ✓'},()=>{})}catch(e){} return}
     case 'seatkind': setSeatKind(+b.dataset.s,b.dataset.v); return;
     case 'ostart': startOnline(); return;
     case 'rules': UI.menuOpen=false; renderRules(); $('#rulesOverlay').hidden=false; $('#rulesOverlay .btn').focus(); return;
@@ -3687,6 +3823,7 @@ $('#rulesOverlay').addEventListener('click',e=>{if(e.target.id==='rulesOverlay')
 document.addEventListener('input',e=>{
   const bind=e.target.dataset&&e.target.dataset.bind; if(!bind) return;
   if(bind==='code'){UI.codeInput=e.target.value.toUpperCase(); return}
+  if(bind==='pname'){NET.name=e.target.value.trim().slice(0,20); try{localStorage.setItem('helteludo.navn',NET.name)}catch(_){} return}
   const [k,s,i]=bind.split(':');
   if(k==='team') R.seats[+s].name=e.target.value; else R.seats[+s].pieces[+i].name=e.target.value;
   saveRoster();
@@ -3735,6 +3872,7 @@ function start(data){
   if(optV<2){R.opts.house.starGoal=false; R.opts.v=2; saveRoster()}
   if(!R.namesV){const used=rosterNames(); R.seats.forEach((rs,s)=>{if(rs.name===SEATS[s].team) rs.name=pick(TEAM_NAMES[s]); rs.pieces.forEach((p,i)=>{if(p.name===SEATS[s].pieces[i]) p.name=fantasyName(used)})}); R.namesV=2; saveRoster()}
   UI.mode=data.mode||'local';
+  {const m=location.search.match(/[?&]spil=([A-Za-z0-9]{5})/); if(m&&!data.code){UI.mode='online'; UI.codeInput=m[1].toUpperCase()}}
   if(data.code){UI.screen='setup'; S=null}
   else {S=data.S||null; UI.screen=data.screen&&S?data.screen:'setup'; if(S){UI.animSeen=S.anim?S.anim.seq:null; UI.rollSeen=S.rollSeq||0; UI.popSeen=S.popSeq||0}}
   render();
@@ -3749,6 +3887,7 @@ async function connect(code){
       if(user){NET.uid=await user.id(); try{NET.canWrite=await user.can('data.write')}catch(e){}}
     }
   }catch(e){}
+  if(!NET.db){NET.p2p=true; NET.db=P2PDB; NET.user=P2PUSER; NET.uid=p2pId(); NET.canWrite=true; try{NET.name=localStorage.getItem('helteludo.navn')||''}catch(e){NET.name=''}}
   NET.ready=true;
   if(!code&&!UI.online&&NET.db&&NET.uid){const rc=rememberedOnline(); if(rc){UI.mode='online'; subscribeGame(rc,true); render(); return}}
   if(code&&NET.db&&NET.uid){UI.mode='online'; subscribeGame(code)}
