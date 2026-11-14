@@ -58,9 +58,19 @@ begin
   return n > 0;
 end $$;
 
+-- Frigiv en lås, når der alligevel ikke skrives noget. En række, der kun var en lås (intet dokument), slettes.
+create or replace function public.helteludo_release(p_path text, p_holder text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  delete from helteludo_docs where path = p_path and data is null and lock_holder = p_holder;
+  update helteludo_docs set lock_holder = null, lock_until = null where path = p_path and lock_holder = p_holder;
+end $$;
+
 revoke all on function public.helteludo_set(text, jsonb) from public;
 revoke all on function public.helteludo_delete(text) from public;
 revoke all on function public.helteludo_acquire(text, text, int) from public;
+revoke all on function public.helteludo_release(text, text) from public;
 grant execute on function public.helteludo_set(text, jsonb) to anon, authenticated;
 grant execute on function public.helteludo_delete(text) to anon, authenticated;
 grant execute on function public.helteludo_acquire(text, text, int) to anon, authenticated;
+grant execute on function public.helteludo_release(text, text) to anon, authenticated;

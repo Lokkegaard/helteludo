@@ -900,17 +900,20 @@ function heroGain(p,id,txt){
   const t=S.teams[p.team];
   if(!id){pop(p,'Ingen ny evne','info'); return}
   const fresh=!Object.keys(p.abil).length; gain(p.abil,id);
-  if(fresh&&ABIL_KIND[id]) p.kind=ABIL_KIND[id];
+  if(fresh){p.origin=id; if(ABIL_KIND[id]) p.kind=ABIL_KIND[id]}
   if(id==='forbandet'&&!t.curse){t.curse=d6(); log(`${p.name} er forbandet. ${t.name} slår ekstra på ${t.curse}'ere i stedet for 6'ere.`, p.team)}
   if(id==='aerkefjende'&&p.hates==null){p.hates=pick(S.teams.map((_,i)=>i).filter(i=>i!==p.team)); log(`${p.name} har fået ${S.teams[p.hates].name} som ærkefjende.`, p.team)}
   S.popSeq=(S.popSeq||0)+1; (S.pops=S.pops||[]).push({n:S.popSeq,pt:piecePos(p).pt,txt:`${p.name}: ${ABIL[id].name}${ABIL[id].lvl&&p.abil[id]>1?` (niveau ${p.abil[id]})`:''}`,k:'good',a:id}); if(S.pops.length>12) S.pops.shift();
-  // Holdet huskes til næste spil på den skærm, der styrer det (online: kun ens eget hold).
-  if(!isOnline()||(!t.ai&&t.uid===NET.uid)){const rs=R.seats[t.seat], rp=rs&&rs.pieces[p.idx]; if(rp){gain(rp.abil,id); if(!rp.origin) rp.origin=id; rs.log=rs.log||[]; rs.log.push({pi:p.idx,txt:`${txt||ABIL[id].name}${txt&&!txt.includes(ABIL[id].name)?` → ${ABIL[id].name}`:''}`,id})}}
+  // Slaget noteres i spillet; holdet gemmes først, når alle dets slag er slået (heroDone).
+  (S.heroLog=S.heroLog||{}); (S.heroLog[p.team]=S.heroLog[p.team]||[]).push({pi:p.idx,txt:`${txt||ABIL[id].name}${txt&&!txt.includes(ABIL[id].name)?` → ${ABIL[id].name}`:''}`,id});
 }
 function heroDone(ti){
   if(S.heroQ.some(x=>x.ti===ti)) return;
   const t=S.teams[ti]; if(isOnline()&&(t.ai||t.uid!==NET.uid)) return;
-  const rs=R.seats[t.seat]; if(rs){rs.rolled=true; saveRoster()}
+  // Holdet huskes til næste spil på den skærm, der styrer det (online: kun ens eget hold).
+  const rs=R.seats[t.seat]; if(!rs) return;
+  t.pieces.forEach(p=>{const rp=rs.pieces[p.idx]; if(!rp) return; rp.abil={...p.abil}; if(p.origin) rp.origin=p.origin});
+  rs.log=(S.heroLog&&S.heroLog[ti])||[]; rs.rolled=true; saveRoster();
 }
 
 function startTurn(ti){
@@ -1172,7 +1175,7 @@ function afterRollCompute(){
   const t=team();
   S.options=computeOptions(); UI.sel=null; UI.hover=null;
   if(S.options.length){S.phase='choose'; S.msg=S.restrict?`Slaget skal bruges af ${pc(S.restrict).name}.`:'Vælg et træk: klik på en brik eller et træk herunder.'; return}
-  if(S.rollsLeft>0&&S.raw!==extraFace(t)){S.phase='roll'; S.msg=`Ingen træk. Slå igen (${S.rollsLeft} forsøg tilbage).`; return}
+  if(S.rollsLeft>0&&S.raw!==extraFace(t)){S.phase='roll'; S.restrict=null; S.boost=null; S.msg=`Ingen træk. Slå igen (${S.rollsLeft} forsøg tilbage).`; return}
   if(S.raw===extraFace(t)){S.phase='roll'; S.rollsLeft=Math.max(S.rollsLeft,1); S.restrict=null; S.msg=`Ingen træk, men en ${S.raw}'er giver et nyt slag.`; return}
   S.phase='choose';
   if(rerollActions().length){S.msg='Ingen mulige træk. Brug en evne, eller afslut turen.'; return}
@@ -1439,7 +1442,7 @@ function act(fn){
 const SAVE_KEY='helteludo.spil', SAVES_KEY='helteludo.gemte';
 function savedGames(){
   let list=[]; try{list=JSON.parse(localStorage.getItem(SAVES_KEY)||'[]')}catch(e){}
-  try{const old=JSON.parse(localStorage.getItem(SAVE_KEY)||'null'); if(old&&old.S&&!old.S.over&&!list.some(g=>g.id===old.S.gameId)) list.push({id:old.S.gameId,t:old.t||Date.now(),S:old.S}); localStorage.removeItem(SAVE_KEY)}catch(e){}
+  try{const raw=localStorage.getItem(SAVE_KEY); if(raw){const old=JSON.parse(raw); if(old&&old.S&&!old.S.over&&!list.some(g=>g.id===old.S.gameId)){list.push({id:old.S.gameId,t:old.t||Date.now(),S:old.S}); writeSaves(list.sort((a,b)=>b.t-a.t))} localStorage.removeItem(SAVE_KEY)}}catch(e){}
   return list.filter(g=>g&&g.S&&!g.S.over).sort((a,b)=>b.t-a.t);
 }
 function writeSaves(list){try{localStorage.setItem(SAVES_KEY,JSON.stringify(list.slice(0,8)))}catch(e){try{localStorage.setItem(SAVES_KEY,JSON.stringify(list.slice(0,3)))}catch(_){}}}
@@ -1480,6 +1483,7 @@ const SUPADB={
     set:async d=>{await supaRpc('helteludo_set',{p_path:path,p_data:d})},
     delete:async()=>{await supaRpc('helteludo_delete',{p_path:path})},
     acquire:async o=>({acquired:!!(await supaRpc('helteludo_acquire',{p_path:path,p_holder:o.holder,p_ttl_ms:o.ttlMs||5000}))}),
+    release:async o=>{await supaRpc('helteludo_release',{p_path:path,p_holder:o.holder})},
     onSnapshot:(cb,err)=>{let busy=false,again=false,dead=false,first=true;
       const pull=async()=>{if(dead) return; if(busy){again=true; return} busy=true;
         try{const d=await supaRow(path); if(!dead) cb(docSnap(d!=null,d))}catch(e){if(first&&err) err(e)} first=false; busy=false; if(again){again=false; pull()}};
@@ -1535,12 +1539,13 @@ function hostSession(code,entries){
   H.get=async path=>docSnap(H.store.has(path),H.store.get(path));
   H.set=async(path,d)=>{H.store.set(path,clone(d)); delete H.locks[path]; if(path==='games/'+code||!path.includes('/seen/')) persist(); notify(path)};
   H.del=async path=>{H.store.delete(path); delete H.locks[path]; persist(); notify(path)};
+  H.release=async(path,o)=>{const l=H.locks[path]; if(l&&l.holder===o.holder) delete H.locks[path]};
   H.acquire=async(path,o)=>{const l=H.locks[path], now=Date.now(); if(!l||l.until<now||l.holder===o.holder){H.locks[path]={holder:o.holder,until:now+(o.ttlMs||5000)}; return {acquired:true}} return {acquired:false}};
   H.sub=(path,coll,cb)=>{const u={path,coll,cb}; H.subs.add(u); setTimeout(()=>{if(H.subs.has(u)) cb(snapOf(path,coll))},0); return ()=>H.subs.delete(u)};
   H.serve=conn=>{
     conn.on('data',async m=>{
       if(!m||typeof m!=='object') return;
-      if(m.t==='req'){let val=null,err=null; try{val=m.op==='get'?await H.get(m.path):m.op==='set'?await H.set(m.path,m.data):m.op==='delete'?await H.del(m.path):await H.acquire(m.path,m)}catch(e){err=String(e)}
+      if(m.t==='req'){let val=null,err=null; try{val=m.op==='get'?await H.get(m.path):m.op==='set'?await H.set(m.path,m.data):m.op==='delete'?await H.del(m.path):m.op==='release'?await H.release(m.path,m):await H.acquire(m.path,m)}catch(e){err=String(e)}
         if(m.op==='get'&&val) val={exists:val.exists,data:H.store.get(m.path)};
         try{conn.send({t:'res',id:m.id,val,err})}catch(e){}}
       if(m.t==='sub'){const u={path:m.path,coll:!!m.coll,conn,subId:m.subId}; H.subs.add(u); try{conn.send({t:'snap',subId:m.subId,v:wire(m.path,!!m.coll)})}catch(e){}}
@@ -1589,6 +1594,7 @@ function clientSession(code){
   };
   C.get=path=>req('get',path); C.set=(path,data)=>req('set',path,{data}); C.del=path=>req('delete',path);
   C.acquire=(path,o)=>req('acquire',path,{holder:o.holder,ttlMs:o.ttlMs});
+  C.release=(path,o)=>req('release',path,{holder:o.holder}).catch(()=>{});
   C.sub=(path,coll,cb,err)=>{const subId=++C.seq, u={path,coll,cb,err}; C.subs.set(subId,u);
     C.open().then(()=>{if(C.subs.has(subId)&&C.conn&&u.sent!==C.conn){C.conn.send({t:'sub',subId,path,coll}); u.sent=C.conn}}).catch(e=>{if(e&&e.nogame) cb(coll?{docs:[]}:docSnap(false,null)); else if(C.subs.has(subId)) C.retry()});
     return ()=>{C.subs.delete(subId); try{C.conn&&C.conn.send({t:'unsub',subId})}catch(e){}}};
@@ -1615,6 +1621,7 @@ const P2PDB={
     set:d=>sessFor(code,path==='games/'+code?d:null).then(s=>s.set(path,d)),
     delete:()=>sessFor(code).then(s=>s.del(path)),
     acquire:o=>sessFor(code).then(s=>s.acquire(path,o)),
+    release:o=>sessFor(code).then(s=>s.release(path,o)),
     onSnapshot:(cb,err)=>{let un=null,dead=false; sessFor(code).then(s=>{if(!dead) un=s.sub(path,false,cb,err)}).catch(e=>err&&err(e)); return ()=>{dead=true; un&&un()}}
   }},
   collection(path){
@@ -1634,8 +1641,11 @@ function p2pId(){try{let u=localStorage.getItem('helteludo.uid'); if(!u){u='p'+M
 /* ---------- Online: shared game document ---------- */
 async function withLock(ref,fn){
   for(let i=0;i<6;i++){
-    const r=await ref.acquire({holder:NET.uid+':'+TAB, ttlMs:5000});
-    if(r.acquired){const snap=await ref.get(); const nd=fn(snap.exists?clone(snap.data()):null); if(nd) await ref.set(nd); return nd}
+    const holder=NET.uid+':'+TAB, r=await ref.acquire({holder, ttlMs:5000});
+    if(r.acquired){
+      let nd=null; try{const snap=await ref.get(); nd=fn(snap.exists?clone(snap.data()):null)}catch(e){if(ref.release) ref.release({holder}).catch(()=>{}); throw e}
+      if(nd) await ref.set(nd); else if(ref.release) await ref.release({holder}).catch(()=>{});
+      return nd}
     await sleep(300+Math.random()*500);
   }
   throw new Error('busy');

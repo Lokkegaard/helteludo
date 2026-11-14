@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 52.
+- Filen `helteludo.html` i denne mappe er identisk med version 53.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -307,3 +307,10 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
   - Lokalt: menneskehold med bægeret, inkl. »Vælg selv«, og computerhold.
   - Online via serveren med en computerspiller.
   - 3.600 slag på Heltetabellen gav alle 36 kombinationer jævnt.
+
+## Fejlrettelser efter kodegennemgang (version 53)
+1. **Gammelt gemt spil gik tabt:** `savedGames` flyttede det gamle `helteludo.spil` ind i listen i hukommelsen, men slettede den gamle plads uden at skrive listen. Nu skrives listen (`writeSaves`), før den gamle plads slettes.
+2. **For mange evner efter en afbrudt Heltetabel:** evnerne blev skrevet til holdet (`R.seats`) ved hvert slag, men holdet blev først markeret som »slået« til sidst. Et afbrudt spil efterlod halve evner, og næste spil slog alle 6 igen. Nu noteres slagene i spillet (`S.heroLog`, `p.origin`), og holdet gemmes samlet i `heroDone`, når alle dets slag er slået.
+3. **Heldig/Uheldig/Booster låste næste slag:** gav omslaget intet træk med forsøg tilbage, blev `S.restrict` stående, så næste slag kun kunne bruges af den ene brik. `afterRollCompute` nulstiller nu `restrict` og `boost`, når turen går tilbage til et nyt slag.
+4. **Online-lås blev ikke frigivet:** når `withLock` ikke skrev noget (afvist træk, forkert spilkode, fuldt spil), holdt låsen i 5 sekunder og kunne give »Trækket kunne ikke gemmes« hos de andre. Nu kaldes `ref.release` (Supabase: ny funktion `helteludo_release` i `server/supabase.sql`, som også sletter rene låserækker; direkte forbindelse: `H.release`). I claude.ai-artefaktet findes `release` ikke, og låsen udløber som før.
+- Testet: gammelt gemt spil fundet og bevaret; et hold fik præcis 6 evner efter afbrudt Heltetabel; den næste 6'er kunne bruges af alle fire brikker; forkert spilkode efterlod ingen række; efter en afvist skrivning fik en anden spiller låsen med det samme; 6 hele computerspil med Heltetabellen.
