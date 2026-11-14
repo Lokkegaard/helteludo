@@ -589,6 +589,21 @@ body.fullgame .score{flex-wrap:nowrap; overflow:hidden; justify-content:safe cen
 .sc .sp{font-size:11.5px; font-weight:700; color:var(--gold); max-width:8em; overflow:hidden; text-overflow:ellipsis}
 .sc.cur .sp{color:var(--muted)}
 @media (max-width:640px){.sc .sp{display:none}}
+/* Ekstraslag fra evner, terningstatistik, gemte spil */
+.pop.xroll{display:flex; align-items:center; gap:7px; padding:4px 10px 4px 5px; font-size:clamp(13px,1.8vw,16px); animation-duration:3.8s; z-index:10}
+.pop.xroll .bimg{width:28px; height:28px; flex:none}
+.pop.xroll .die.mini{width:30px; height:30px; padding:4px; flex:none; box-shadow:1px 2px 0 rgba(59,42,26,.35)}
+.pop.good{background:#cfe8c9; color:#1f4d2b}
+.pop.bad.xroll{background:#f3c1b5}
+.dstat{border:1.5px solid rgba(59,42,26,.25); border-left:5px solid var(--c,var(--ink)); border-radius:6px; padding:8px 10px; background:var(--paper-2); color:var(--ink)}
+.dstat .dh{display:flex; gap:8px; align-items:baseline; justify-content:space-between; flex-wrap:wrap; font-size:14px}
+.dbars{position:relative; display:grid; grid-template-columns:repeat(6,1fr); gap:8px; height:150px; align-items:end; margin-top:6px}
+.dbar{display:grid; grid-template-rows:auto 1fr auto auto; justify-items:center; height:100%; font-size:12px; font-variant-numeric:tabular-nums}
+.dbar i{display:block; align-self:end; width:70%; background:var(--c,var(--hero)); border:1.5px solid var(--ink); border-bottom:0; border-radius:4px 4px 0 0}
+.dbar .dk .die.mini{width:24px; height:24px; padding:3px}
+.dbar .dp{color:var(--muted)}
+.dgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; margin-top:10px}
+.tok{transition:left .38s cubic-bezier(.3,1.25,.5,1), top .38s cubic-bezier(.3,1.25,.5,1), width .2s, opacity .2s, rotate .35s ease}
 </style>
 
 <div class="wrap" id="app"></div>
@@ -825,6 +840,9 @@ const circDist=(a,b)=>Math.min(mod(a-b,B.TL),mod(b-a,B.TL));
 function log(txt, ti){S.log.unshift({txt, ti:ti??null}); if(S.log.length>100) S.log.length=100}
 // En kort tekst, der svæver op fra brikken, når en evne slår til. Ligger i spillets tilstand, så alle skærme ser den.
 function pop(p,txt,k='good'){S.popSeq=(S.popSeq||0)+1; (S.pops=S.pops||[]).push({n:S.popSeq,pt:piecePos(p).pt,txt,k}); if(S.pops.length>12) S.pops.shift()}
+// Et ekstraslag fra en evne (Sej, Vatarm, Pacifist, Bersærk, Hypnotisør, Hovmodig, Ingen stedsans, Booster, Heldig, Uheldig):
+// vises som et kort ved brikken med evnens mærke, terningen og resultatet.
+function xroll(p,abil,r,ok,res){S.popSeq=(S.popSeq||0)+1; (S.pops=S.pops||[]).push({n:S.popSeq,pt:piecePos(p).pt,txt:`${ABIL[abil].name}: ${res}`,k:ok?'good':'bad',d:r,a:abil}); if(S.pops.length>12) S.pops.shift()}
 function once(p,k,fn){const key=p.id+k; if(!(key in S.cache)) S.cache[key]=fn(); return S.cache[key]}
 
 // config: [{seat, name, pieces:[{name,abil}], ai, uid}]
@@ -876,7 +894,7 @@ function effMove(p,raw){
 }
 function hovmod(p){
   if(!lv(p,'hovmodig')) return false;
-  return once(p,'hov',()=>{const r=d6(), y=r>=6-lv(p,'hovmodig'); pop(p,`Hovmodig: slog ${r}${y?' – en omgang til!':' – går mod mål'}`,y?'bad':'info'); log(`Hovmodig (${p.name}) slår ${r}${y?': den vil lige løbe en omgang til!':' og går pænt mod mål.'}`, p.team); return y});
+  return once(p,'hov',()=>{const r=d6(), y=r>=6-lv(p,'hovmodig'); xroll(p,'hovmodig',r,!y,y?'en omgang til!':'går mod mål'); log(`Hovmodig (${p.name}) slår ${r}${y?': den vil lige løbe en omgang til!':' og går pænt mod mål.'}`, p.team); return y});
 }
 function walk(p,start,n,dir){
   let rel=start, lap=0, d=dir; const path=[];
@@ -1058,7 +1076,7 @@ function computeOptions(){
     const eff=effMove(p,raw);
     const ns=new Set(); if(eff>=1) ns.add(eff);
     if(lv(p,'stifinder')){if(eff-1>=1) ns.add(eff-1); ns.add(eff+1)}
-    const confused=lv(p,'ingenstedsans')&&ns.size?once(p,'conf',()=>{const r=d6(), y=r>=7-lv(p,'ingenstedsans'); pop(p,`Ingen stedsans: slog ${r}${y?' – kun baglæns!':' – finder vej'}`,y?'bad':'info'); log(`Ingen stedsans (${p.name}) slår ${r}${y?' og er forvirret. Den kan kun gå baglæns.':' og finder vej.'}`,p.team); return y}):false;
+    const confused=lv(p,'ingenstedsans')&&ns.size?once(p,'conf',()=>{const r=d6(), y=r>=7-lv(p,'ingenstedsans'); xroll(p,'ingenstedsans',r,!y,y?'kun baglæns!':'finder vej'); log(`Ingen stedsans (${p.name}) slår ${r}${y?' og er forvirret. Den kan kun gå baglæns.':' og finder vej.'}`,p.team); return y}):false;
     for(const n of ns){
       const tag=n!==eff?`Stifinder ${n>eff?'+1':'−1'}`:'';
       if(confused){addBack(opts,p,n,'Forvirret'); continue}
@@ -1098,7 +1116,7 @@ function rerollActions(){
 /* ---------- Actions ---------- */
 function doRoll(){
   if(!S||S.phase!=='roll') return;
-  S.raw=d6(); S.rollsLeft--; S.cache={}; S.boost=null; UI.undo=null;
+  S.raw=d6(); S.rollsLeft--; S.cache={}; S.boost=null; UI.undo=null; countDie(S.cur,S.raw);
   log(`${team().name} slår ${S.raw}.`, S.cur);
   UI.rolledFlash=true; S.rollSeq=(S.rollSeq||0)+1;
   afterRollCompute();
@@ -1113,12 +1131,14 @@ function afterRollCompute(){
   if(rerollActions().length){S.msg='Ingen mulige træk. Brug en evne, eller afslut turen.'; return}
   S.phase='done'; S.msg='Ingen mulige træk.';
 }
+// Terningstatistik: hvert holds slag (inkl. omslag og boosterterninger) tælles pr. øjental i spillets tilstand.
+function countDie(ti,v){if(!(v>=1&&v<=6)) return; S.dice=S.dice||{}; const a=S.dice[ti]=S.dice[ti]||[0,0,0,0,0,0]; a[v-1]++}
 function useReroll(i){
   const a=rerollActions()[i]; if(!a) return;
   const p=pc(a.pid); UI.undo=null;
-  if(a.kind==='heldig'){p.used.heldig++; S.raw=d6(); S.cache={}; S.boost=null; S.restrict=p.id; log(`${p.name} er heldig og slår om: ${S.raw}.`, p.team); pop(p,`Heldig! Slår om: ${S.raw}`)}
-  if(a.kind==='booster'){p.used.booster++; S.boost={pid:p.id,v:d6()}; S.restrict=p.id; log(`${p.name} booster og slår en ekstra terning: +${S.boost.v}.`, p.team); pop(p,`Booster: +${S.boost.v}`)}
-  if(a.kind==='uheldig'){p.used.uh=p.used.uh||{}; p.used.uh[a.by]=(p.used.uh[a.by]||0)+1; S.raw=d6(); S.cache={}; S.boost=null; S.restrict=p.id; log(`${p.name} er uheldig. ${S.teams[a.by].name} kræver omslag: ${S.raw}, og ${p.name} skal bruge det.`, p.team); pop(p,`Uheldig! Slår om: ${S.raw}`,'bad')}
+  if(a.kind==='heldig'){p.used.heldig++; S.raw=d6(); countDie(p.team,S.raw); S.cache={}; S.boost=null; S.restrict=p.id; log(`${p.name} er heldig og slår om: ${S.raw}.`, p.team); xroll(p,'heldig',S.raw,true,'nyt slag')}
+  if(a.kind==='booster'){p.used.booster++; S.boost={pid:p.id,v:d6()}; countDie(p.team,S.boost.v); S.restrict=p.id; log(`${p.name} booster og slår en ekstra terning: +${S.boost.v}.`, p.team); xroll(p,'booster',S.boost.v,true,`+${S.boost.v} felter`)}
+  if(a.kind==='uheldig'){p.used.uh=p.used.uh||{}; p.used.uh[a.by]=(p.used.uh[a.by]||0)+1; S.raw=d6(); countDie(p.team,S.raw); S.cache={}; S.boost=null; S.restrict=p.id; log(`${p.name} er uheldig. ${S.teams[a.by].name} kræver omslag: ${S.raw}, og ${p.name} skal bruge det.`, p.team); xroll(p,'uheldig',S.raw,false,'tvunget omslag')}
   UI.rolledFlash=true; S.rollSeq=(S.rollSeq||0)+1;
   afterRollCompute();
 }
@@ -1139,8 +1159,8 @@ function sendHome(q,by){
   log(`${q.name} ryger hjem${foes.length?` (slået af ${foes.map(b=>b.name).join(' og ')})`:''}.`, q.team);
 }
 function attack(p,q){
-  if(lv(p,'vatarm')){const r=d6(); if(r>=7-lv(p,'vatarm')){pop(p,'Vatarm! Falder selv om','bad'); log(`Vatarm! ${p.name} slår ${r} og falder selv om.`,p.team); sendHome(p,[q]); return false}}
-  if(lv(q,'sej')){const r=d6(); if(r>=7-lv(q,'sej')){pop(q,'Sej! Angriberen ryger hjem'); log(`${q.name} er sej og slår ${r}. Angriberen ryger hjem!`,q.team); sendHome(p,[q]); return false}}
+  if(lv(p,'vatarm')){const r=d6(), hit=r>=7-lv(p,'vatarm'); xroll(p,'vatarm',r,!hit,hit?'falder selv om!':'angriber'); if(hit){ log(`Vatarm! ${p.name} slår ${r} og falder selv om.`,p.team); sendHome(p,[q]); return false}}
+  if(lv(q,'sej')){const r=d6(), ok=r>=7-lv(q,'sej'); xroll(q,'sej',r,ok,ok?'angriberen ryger hjem!':'holder ikke'); if(ok){ log(`${q.name} er sej og slår ${r}. Angriberen ryger hjem!`,q.team); sendHome(p,[q]); return false}}
   sendHome(q,[p]); return true;
 }
 function resolveLanding(p){
@@ -1151,7 +1171,7 @@ function resolveLanding(p){
 }
 function pacifistRefuses(p,o){
   if(!lv(p,'pacifist')||!o.out||o.out.type!=='knock') return false;
-  const r=d6(); if(r>=6-lv(p,'pacifist')){pop(p,'Pacifist: nægter!','info'); log(`${p.name} er pacifist, slår ${r} og nægter at slå nogen hjem. Den bliver stående.`,p.team); return true}
+  const r=d6(), no=r>=6-lv(p,'pacifist'); xroll(p,'pacifist',r,!no,no?'nægter!':'slår til'); if(no){ log(`${p.name} er pacifist, slår ${r} og nægter at slå nogen hjem. Den bliver stående.`,p.team); return true}
   return false;
 }
 function passEffects(p,o){
@@ -1159,8 +1179,8 @@ function passEffects(p,o){
   if(!bz&&!hy) return;
   const s=seatOf(p), cells=[...new Set(o.path.filter(r=>r>=-1&&r<=B.LAST).map(r=>relAbs(s,r)))];
   for(const a of cells) for(const q of visibleAt(a,p)){
-    if(bz&&!q.aura){const r=d6(); if(r>=7-bz){pop(q,'Trampet ned af bersærk!','bad'); log(`Bersærk! ${p.name} tramper på ${q.name} (slog ${r}).`,p.team); sendHome(q,q.team!==p.team?[p]:[]); continue}}
-    if(hy&&q.team!==p.team&&onBoard(q)){const r=d6(); if(r>=7-hy){q.frozen=d6(); pop(q,`Hypnotiseret i ${q.frozen} runder`,'info'); log(`${p.name} hypnotiserer ${q.name} (slog ${r}). Lammet i ${q.frozen} runder.`,p.team)}}
+    if(bz&&!q.aura){const r=d6(), ok=r>=7-bz; xroll(q,'bersaerk',r,!ok,ok?'trampet ned!':'slap fri'); if(ok){ log(`Bersærk! ${p.name} tramper på ${q.name} (slog ${r}).`,p.team); sendHome(q,q.team!==p.team?[p]:[]); continue}}
+    if(hy&&q.team!==p.team&&onBoard(q)){const r=d6(), ok=r>=7-hy; if(ok) q.frozen=d6(); xroll(q,'hypnotisor',r,!ok,ok?`lammet i ${q.frozen} runder`:'modstår'); if(ok){ log(`${p.name} hypnotiserer ${q.name} (slog ${r}). Lammet i ${q.frozen} runder.`,p.team)}}
   }
 }
 function explode(p){
@@ -1366,10 +1386,18 @@ function act(fn){
   if(isOnline()) commit(); else saveGame();
 }
 // Et lokalt spil gemmes efter hvert træk, så det kan fortsættes, hvis siden lukkes.
-const SAVE_KEY='helteludo.spil';
-function saveGame(){if(!S||isOnline()) return; try{localStorage.setItem(SAVE_KEY,JSON.stringify({S,t:Date.now()}))}catch(e){}}
-function savedGame(){try{const j=JSON.parse(localStorage.getItem(SAVE_KEY)); return j&&j.S&&!j.S.over?j:null}catch(e){return null}}
-function clearSave(){try{localStorage.removeItem(SAVE_KEY)}catch(e){}}
+// Gemte spil på denne skærm: op til 8 igangværende spil, hver under sit spil-id. Et spil gemmes efter hvert træk og
+// bliver liggende, når man går til opstillingen, så man kan vende tilbage til det. Et afsluttet spil fjernes.
+const SAVE_KEY='helteludo.spil', SAVES_KEY='helteludo.gemte';
+function savedGames(){
+  let list=[]; try{list=JSON.parse(localStorage.getItem(SAVES_KEY)||'[]')}catch(e){}
+  try{const old=JSON.parse(localStorage.getItem(SAVE_KEY)||'null'); if(old&&old.S&&!old.S.over&&!list.some(g=>g.id===old.S.gameId)) list.push({id:old.S.gameId,t:old.t||Date.now(),S:old.S}); localStorage.removeItem(SAVE_KEY)}catch(e){}
+  return list.filter(g=>g&&g.S&&!g.S.over).sort((a,b)=>b.t-a.t);
+}
+function writeSaves(list){try{localStorage.setItem(SAVES_KEY,JSON.stringify(list.slice(0,8)))}catch(e){try{localStorage.setItem(SAVES_KEY,JSON.stringify(list.slice(0,3)))}catch(_){}}}
+function saveGame(){if(!S||isOnline()) return; const list=savedGames().filter(g=>g.id!==S.gameId); if(!S.over) list.unshift({id:S.gameId,t:Date.now(),S}); writeSaves(list)}
+function savedGame(id){const l=savedGames(); return id?l.find(g=>g.id===id)||null:l[0]||null}
+function clearSave(id){writeSaves(savedGames().filter(g=>g.id!==(id||(S&&S.gameId))))}
 
 /* ---------- Online på en rigtig server: Supabase (database + live-opdateringer) ---------- */
 // Uden for claude.ai bruger online-spil Supabase-projektet »Skolearbejde« (tabellen helteludo_docs, se server/supabase.sql).
@@ -1630,7 +1658,7 @@ function ensureList(){
   if(!NET.db||UI.listUnsub) return;
   try{
     UI.listUnsub=NET.db.collection('games').where('status','in',['lobby','playing']).limit(60).onSnapshot(q=>{
-      const cutoff=Date.now()-12*3600e3;
+      const cutoff=Date.now()-48*3600e3;
       UI.gameList=q.docs.map(d=>d.data()).filter(g=>(g.updated||0)>cutoff).sort((a,b)=>(b.updated||0)-(a.updated||0));
       fetchNames(UI.gameList.map(g=>g.host));
       if(UI.screen==='setup'&&UI.mode==='online') render();
@@ -1675,6 +1703,18 @@ async function joinGame(code,seat){
   }catch(e){UI.onlineMsg=NET.p2p?'Kunne ikke få forbindelse til værten. Tjek koden, og at værten har spillet åbent.':NET.mode==='server'?'Kunne ikke deltage. Tjek internetforbindelsen, og prøv igen.':'Kunne ikke deltage. Prøv igen.'}
   render();
 }
+// Uden for claude.ai hører en plads til browserens spiller-id. Kommer man tilbage fra en anden enhed eller browser,
+// kan man overtage sin plads igen ved at skrive det samme navn.
+async function claimSeat(code,s){
+  const ref=NET.db.doc('games/'+code);
+  try{await withLock(ref,d=>{if(!d) return null; const x=d.seats[s]; if(!x||x.kind!=='human'||x.uid===NET.uid) return null;
+      const old=x.uid; x.uid=NET.uid; x.name=NET.name||x.name; if(d.host===old){d.host=NET.uid; d.hostName=NET.name||d.hostName}
+      if(d.state) d.state.teams.forEach(t=>{if(t.uid===old) t.uid=NET.uid});
+      d.rev=(d.rev||0)+1; d.updated=Date.now(); return d});
+    UI.mode='online'; subscribeGame(code); rememberOnline(code);
+  }catch(e){UI.onlineMsg='Pladsen kunne ikke overtages. Prøv igen.'}
+  render();
+}
 async function leaveLobby(){
   const o=UI.online; if(!o) return; forgetOnline();
   const host=o.isHost, ref=o.ref;
@@ -1711,6 +1751,7 @@ function recordGame(){
     const ti=S.teams.indexOf(t), place=S.finished.indexOf(ti)+1, rs=R.seats[t.seat];
     const st=rs.stats=rs.stats||{games:0,wins:0,places:[0,0,0,0],points:0,knocks:0,knocked:0,goals:0,homeruns:0};
     st.games++; if(place===1) st.wins++; st.places[place-1]++; st.points+=n-place;
+    const dd=(S.dice||{})[ti]; if(dd){rs.dice=rs.dice||[0,0,0,0,0,0]; dd.forEach((c,k)=>rs.dice[k]+=c)}
     rs.games=st.games;
     t.pieces.forEach((p,i)=>{const rp=rs.pieces[i]; if(!rp) return; const ps=rp.st=rp.st||{games:0,knocks:0,knocked:0,goals:0,homeruns:0,hp:0};
       ps.games++; ['knocks','knocked','goals','homeruns'].forEach(k=>{ps[k]+=p.st[k]; st[k]+=p.st[k]}); ps.hp+=p.hp});
@@ -1802,12 +1843,15 @@ function settingsHtml(){
 function renderLocal(){
   const seats=SEAT_SETS[R.n];
   const ready=seats.every(s=>(R.seats[s].rolled||R.seats[s].ai)&&!R.seats[s].log.some(e=>e.pending));
-  const sg=savedGame();
-  const resume=sg?`<div class="panel resumep"><div><div class="eyebrow">Et spil er i gang</div><div class="tname" style="font-size:20px">${sg.S.teams.map(t=>esc(t.name)).join(' · ')}</div></div><button class="btn primary" data-act="continue">Fortsæt spillet</button></div>`:'';
+    const saves=savedGames(), when=t=>new Date(t).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const resume=saves.length?`<div class="panel resumep" style="display:block"><div class="eyebrow">Gemte spil – fortsæt, hvor I slap</div>
+    <div class="glist" style="margin-top:8px">${saves.map(g=>`<div class="grow"><span class="dots">${g.S.teams.map(t=>`<i style="${seatStyle(t.seat)}"></i>`).join('')}</span><span class="gi" style="min-width:0"><b>${g.S.teams.map(t=>esc(t.name)).join(' · ')}</b><br><span class="muted small">Gemt ${when(g.t)} · ${g.S.teams.reduce((a,t)=>a+t.pieces.filter(p=>p.state==='goal').length,0)} brikker i mål · tur ${g.S.turnId}</span></span>
+      <button class="btn small primary" data-act="continue" data-id="${esc(g.id)}">Fortsæt</button><button class="btn small" data-act="delsave" data-id="${esc(g.id)}">${UI.confirm==='del'+g.id?'Klik igen for at slette':'Slet'}</button></div>`).join('')}</div></div>`:'';
   return `${resume}<section class="setup-bar">
     <div class="seg" role="group" aria-label="Antal hold">${[2,3,4].map(n=>`<button class="${R.n===n?'on':''}" data-act="n" data-n="${n}" aria-pressed="${R.n===n}">${n} hold</button>`).join('')}</div>
     <button class="btn ghost" data-act="rules">Evner og regler</button>
     <button class="btn ghost" data-act="heltebog">Heltebog og turnering</button>
+    <button class="btn ghost" data-act="dicestats">🎲 Terningstatistik</button>
     <span class="spacer"></span>
     <button class="btn big" data-act="quick" ${seats.some(s=>R.seats[s].log.some(e=>e.pending))?'disabled':''} title="Hold, der ikke har rullet deres evner, ruller automatisk">⚡ Hurtigt spil</button>
     <button class="btn primary big" data-act="start" ${ready?'':'disabled'}>Start spillet</button>
@@ -1850,6 +1894,8 @@ function renderOnline(){
   const mineGames=UI.gameList.filter(g=>Object.values(g.seats||{}).some(x=>x.uid===NET.uid));
   const openGames=UI.gameList.filter(g=>g.status==='lobby'&&!mineGames.includes(g)&&Object.values(g.seats||{}).some(x=>x.kind==='open'));
   const watch=UI.gameList.filter(g=>g.status==='playing'&&!mineGames.includes(g));
+  const me=(NET.name||'').trim().toLowerCase();
+  const claim=g=>NET.mode==='claude'||!me?'':Object.keys(g.seats||{}).filter(k=>{const x=g.seats[k]; return x.kind==='human'&&x.uid!==NET.uid&&(x.name||'').trim().toLowerCase()===me}).map(k=>`<button class="btn small primary" style="${seatStyle(+k)}" data-act="claim" data-code="${esc(g.code)}" data-s="${k}">Fortsæt som ${esc(g.seats[k].name)}</button>`).join('');
   const dots=g=>`<span class="dots">${Object.keys(g.seats).map(k=>`<i style="${seatStyle(+k)}" class="${g.seats[k].kind==='open'?'open':''}"></i>`).join('')}</span>`;
   return `${msg?`<div style="margin-top:18px">${msg}</div>`:''}<div class="online">
     <section class="panel opanel">
@@ -1869,7 +1915,7 @@ function renderOnline(){
       ${mineGames.length?`<div class="field"><span class="eyebrow">Dine spil</span><div class="glist">${mineGames.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">${g.status==='lobby'?'Venter på spillere':'I gang'}</span><button class="btn small primary" data-act="resume" data-code="${esc(g.code)}">Fortsæt</button></div>`).join('')}</div></div>`:''}
       ${NET.p2p?`<p class="muted small">Få koden eller et link af den, der har oprettet spillet. Spillet kører i værtens browser, så værten skal have siden åben, mens I spiller.</p>`:''}
       ${NET.p2p?'':`<div class="field"><span class="eyebrow">Åbne spil</span>${openGames.length?`<div class="glist">${openGames.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">Oprettet af ${esc(UI.names[g.host]||'en spiller')}</span>${Object.keys(g.seats).filter(k=>g.seats[k].kind==='open').map(k=>`<button class="btn small" style="${seatStyle(+k)}" data-act="join" data-code="${esc(g.code)}" data-s="${k}" ${NET.canWrite===false?'disabled':''}>Spil som ${SEATS[+k].name}</button>`).join('')}</div>`).join('')}</div>`:'<p class="muted">Ingen åbne spil lige nu. Opret et, og send koden til de andre.</p>'}</div>`}
-      ${watch.length?`<div class="field"><span class="eyebrow">Spil i gang</span><div class="glist">${watch.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">I gang</span><button class="btn small" data-act="resume" data-code="${esc(g.code)}">Se med</button></div>`).join('')}</div></div>`:''}
+      ${watch.length?`<div class="field"><span class="eyebrow">Spil i gang</span><div class="glist">${watch.map(g=>`<div class="grow"><span class="gc">${esc(g.code)}</span>${dots(g)}<span class="gi">I gang · ${Object.values(g.seats||{}).filter(x=>x.kind==='human').map(x=>esc(x.name||'?')).join(', ')}</span>${claim(g)}<button class="btn small" data-act="resume" data-code="${esc(g.code)}">Se med</button></div>`).join('')}</div></div>`:''}
     </section></div>`;
 }
 function lobbyHtml(d){
@@ -1958,6 +2004,18 @@ function actionPieces(){
   if(!S||S.over||S.phase!=='choose'||!myHumanTurn()) return new Set();
   return new Set([...S.options.map(o=>o.pid),...visibleActs().filter(([a])=>a.kind!=='uheldig').map(([a])=>a.pid)]);
 }
+// Skjoldene på 2D-kortet drejes, så spidsen peger i gåretningen (langs banen og ind ad målvejen). Hjemme og i mål står de lige.
+function tokenTurn(p){
+  if(p.state!=='track'&&p.state!=='air') return 0;
+  const s=seatOf(p);
+  if(p.raid) return 0;
+  const rel=p.state==='air'?p.airRel:p.rel; if(rel==null||rel<0) return 0;
+  const a=relPt(s,rel), b=rel<B.GOAL-1?relPt(s,rel+1):GOALPOS[s];
+  if(!a||!b||(a[0]===b[0]&&a[1]===b[1])) return 0;
+  let d=Math.round(Math.atan2(b[0]-a[0],b[1]-a[1])*180/Math.PI-90);
+  while(d>180) d-=360; while(d<-180) d+=360;
+  return d;
+}
 function renderTokens(){
   const box=$('#tokens'); if(!box) return;
   const mine=myHumanTurn();
@@ -1978,7 +2036,7 @@ function renderTokens(){
     let el=document.getElementById('tok-'+p.id);
     if(!el){el=document.createElement('button'); el.id='tok-'+p.id; el.dataset.act='tok'; el.dataset.pid=p.id; el.innerHTML=shieldSvg(p)+'<i class="sb" aria-hidden="true"></i>'; box.appendChild(el)}
     const g=groups[pos[p.id].key], k=g.indexOf(p), n=g.length, [dy,dx]=offset(k,n), [y,x]=pos[p.id].pt, s=seatOf(p);
-    if(!UI.animating){el.style.left=((x+dx)/15*100)+'%'; el.style.top=((y+dy)/15*100)+'%'}
+    if(!UI.animating){el.style.left=((x+dx)/15*100)+'%'; el.style.top=((y+dy)/15*100)+'%'; el.style.rotate=tokenTurn(p)+'deg'}
     el.style.setProperty('--c',SEATS[s].hex); el.style.setProperty('--cink',SEATS[s].ink);
     el.className='tok'+(n>1?' small':'')+(movable.has(p.id)?' can':'')+(UI.sel===p.id?' sel':'')+(p.aura?' aura':'')+(p.invisible?' invis':'')+(p.frozen>0?' frozen':'')+(p.state==='regen'?' regen':'')+(p.state==='air'?' air':'')+(isSafe(p)?' safe':'')+(UI.animating&&UI.animPid===p.id?' stepping':'');
     el.title=`${p.name} · ${S.teams[p.team].name}`;
@@ -3218,9 +3276,10 @@ function showPops(){
   const wrap=$('.board-wrap'); if(!wrap) return;
   fresh.forEach((q,k)=>setTimeout(()=>{
     const at=boardPt(q.pt,1.25); if(!at) return;
-    const el=document.createElement('div'); el.className='pop '+q.k; el.textContent=q.txt;
-    el.style.left=at.x+'px'; el.style.top=at.y+'px'; wrap.appendChild(el); setTimeout(()=>el.remove(),2500);
-  },k*420));
+    const el=document.createElement('div'); el.className='pop '+q.k+(q.d?' xroll':'');
+    if(q.d){el.innerHTML=`${BADGES[q.a]?`<i class="bimg bi-${q.a}" aria-hidden="true"></i>`:''}${dieHtml(q.d,'mini')}<span>${esc(q.txt)}</span>`; el.setAttribute('role','status')} else el.textContent=q.txt;
+    el.style.left=at.x+'px'; el.style.top=at.y+'px'; wrap.appendChild(el); setTimeout(()=>el.remove(),q.d?3900:2500);
+  },k*(q.d?700:420)));
 }
 function fxAdd(markup,ms){
   const svg=$('#fx svg'); if(!svg) return;
@@ -3611,11 +3670,11 @@ function renderSide(){
   const score=`<div class="score" role="list" aria-label="Stillingen">${S.teams.map((tm,ti)=>{const place=S.finished.indexOf(ti), cur=!S.over&&ti===S.cur, inGoal=tm.pieces.filter(p=>p.state==='goal').length, hp=tm.pieces.reduce((a,p)=>a+p.hp,0);
     const pl=isOnline()&&!tm.ai&&tm.uid?(tm.uid===NET.uid?'Dig':(UI.names[tm.uid]||'Online spiller')):'';
     return `<div class="sc${cur?' cur':''}${!S.over&&ti===nextTi&&ti!==S.cur?' next':''}${place>=0?' done':''}" role="listitem" style="${seatStyle(tm.seat)}" title="${esc(tm.name)}${pl?' · '+esc(pl):''}${cur?' · har turen':''} · ${inGoal} af 4 i mål · ${fmtHp(hp)} heltepoint">${symSvg(tm.seat)}<span class="sn">${esc(tm.name)}</span>${pl?`<span class="sp">${esc(pl)}</span>`:''}<span class="dots" aria-hidden="true">${tm.pieces.map(p=>`<i${p.state==='goal'?' class="on"':''}></i>`).join('')}</span><span class="shp">★ ${fmtHp(hp)}</span>${tm.curse?`<span class="scurse" title="Forbandet: ${esc(tm.name)} slår ekstra på ${tm.curse}'ere i stedet for 6'ere">☠${tm.curse}</span>`:''}${place>=0?`<span class="pl">${place+1}.</span>`:''}</div>`}).join('')}</div>`;
-  const leave=S.over?(online?'Tilbage til online':'Til holdopstilling'):UI.confirm==='tosetup'?(online?'Klik igen for at forlade':'Klik igen for at afbryde'):(online?'Forlad spillet':'Afbryd spillet');
+  const leave=S.over?(online?'Tilbage til online':'Til holdopstilling'):UI.confirm==='tosetup'?(online?'Klik igen for at forlade':'Klik igen for at afbryde'):(online?'Forlad spillet':'Gem og gå til opstillingen');
   const gmenu=`<details class="tbmenu" id="tbmenu" ${UI.menuOpen?'open':''}><summary class="btn ghost small" aria-label="Menu">☰<span class="ml"> Menu</span></summary><div class="tbpop panel">
     ${S.over?'':`<button class="btn small" data-act="side" aria-pressed="${UI.side}">${UI.side?'Skjul holdpanelet':'Vis holdpanelet'}</button>`}
     ${document.fullscreenEnabled?`<button class="btn small" data-act="fullscreen">${document.fullscreenElement?'Afslut fuld skærm':'Fuld skærm'}</button>`:''}
-    <button class="btn small" data-act="rules">Evner og regler</button>${menuItems(true)}<button class="btn small" data-act="tosetup">${leave}</button></div></details>`;
+    <button class="btn small" data-act="rules">Evner og regler</button><button class="btn small" data-act="dicestats">🎲 Terningstatistik</button>${menuItems(true)}<button class="btn small" data-act="tosetup">${leave}</button></div></details>`;
   const logPop=UI.logOpen?`<div class="logpop panel" id="logpop" role="dialog" aria-label="Hvad skete der"><h3>Hvad skete der</h3><ul class="log">${S.log.slice(0,40).map(e=>`<li${e.ti!=null&&S.teams[e.ti]?` style="${seatStyle(S.teams[e.ti].seat)}"`:''}><span class="dot"></span><span>${esc(e.txt)}</span></li>`).join('')}</ul></div>`:'';
   setHtml($('#topbar'),`<div class="logo">Helteludo</div>${score}<div class="tb-actions">${online?`<span class="tag" style="align-self:center">Online · ${esc(UI.online.code)}</span>`:''}${UI.viewMsg?`<span class="tag" style="align-self:center">${esc(UI.viewMsg)}</span>`:''}<button class="btn ghost small icon" data-act="view" title="${UI.view==='3d'?'Vis 2D-kort':'Vis 3D-bord'}" aria-label="${UI.view==='3d'?'Vis 2D-kort':'Vis 3D-bord'}">${UI.view==='3d'?'2D':'3D'}</button><button class="btn ghost small icon" data-act="log" aria-pressed="${!!UI.logOpen}" title="Hvad skete der?" aria-label="Hvad skete der?">📜</button>${gmenu}</div>${logPop}`);
   let main='', mbar='', hud='', tray='';
@@ -3626,6 +3685,7 @@ function renderSide(){
     <div class="turn-body">
       <ol class="podium">${S.finished.map((ti,k)=>`<li style="${seatStyle(S.teams[ti].seat)}"><span class="pl">${k+1}.</span>${symSvg(S.teams[ti].seat)}${esc(S.teams[ti].name)}</li>`).join('')}</ol>
       ${awardsHtml()}
+      ${S.dice?`<div><div class="eyebrow" style="margin-bottom:6px">Terningerne i dette spil</div>${diceBars((()=>{const t=[0,0,0,0,0,0]; Object.values(S.dice).forEach(a=>a.forEach((c,k)=>t[k]+=c)); return t})(),'Alle hold')}<button class="btn small" data-act="dicestats" style="margin-top:6px">Se pr. hold</button></div>`:''}
       <div><div class="eyebrow">Heltepoint</div><p class="msg" style="font-weight:600;font-size:13.5px;margin-top:4px">For hver 2 heltepoint slår brikken én gang på Heltetabellen. For hver 2 minuspoint mister den et niveau i en tilfældig evne.${online?' Hver spiller udfører heltestigningen for sit eget hold, og holdet gemmes i spillerens egen browser.':''}</p></div>
       ${S.teams.map(tm=>`<div class="lvtab" style="${seatStyle(tm.seat)}"><div class="rt-h" style="font-size:18px"><span class="sw"></span>${esc(tm.name)}</div>${tm.pieces.map(p=>{const n=p.hp>=2?Math.floor(p.hp/2):0, m=p.hp<=-2?Math.floor(-p.hp/2):0; return `<div class="lvrow"><span class="hp">★ ${fmtHp(p.hp)}</span><span>${esc(p.name)}</span><span class="what">${n?`${n} slag`:m?`mister ${m}`:'–'}</span></div>`}).join('')}${UI.leveled&&mineTeams.includes(tm)?rollLogHtml(tm.seat):''}</div>`).join('')}
       <div class="acts">${!mineTeams.length?'':`${online?'':`<button class="btn primary" data-act="again" ${UI.leveled&&pending?'disabled':''}>${UI.leveled?'Spil igen med samme hold':'Heltestigning og spil igen'}</button>`}${UI.leveled?`<button class="btn${online?' primary':''}" data-act="tosetup" ${pending?'disabled':''}>${online?'Tilbage til online':'Til holdopstilling'}</button>`:`<button class="btn${online?' primary':''}" data-act="level">Udfør heltestigning${online?' for dit hold':''}</button>`}`}</div>
@@ -3724,7 +3784,7 @@ function renderGame(){
   const key=B.kind+S.teams.map(t=>t.seat+t.name).join('|');
   if(!$('#board')||UI.shellKey!==key) buildShell();
   if(UI.view==='3d'&&has3D()) V3D.mount($('#board')); else V3D.unmount();
-  if(S.over){recordGame(); if(!isOnline()) clearSave(); if(UI.celebrated!==S.gameId){UI.celebrated=S.gameId; setTimeout(celebrate,400)}}
+  if(S.over){recordGame(); if(!isOnline()) clearSave(S.gameId); if(UI.celebrated!==S.gameId){UI.celebrated=S.gameId; setTimeout(celebrate,400)}}
   if((S.rollSeq||0)!==UI.rollSeen){UI.rollSeen=S.rollSeq||0; UI.rolledFlash=true; sfx('dice'); if(V3D.active&&S.raw) V3D.rollDie(S.raw)}
   V3D.cupReady=!S.over&&S.phase==='roll'&&myHumanTurn()&&!UI.animating;
   renderCamSel();
@@ -3751,6 +3811,22 @@ function render(){
   if(UI.coach!=null) requestAnimationFrame(renderCoach);
 }
 
+function diceBars(arr,label,sty){
+  const tot=arr.reduce((a,b)=>a+b,0), mx=Math.max(1,...arr);
+  return `<div class="dstat" ${sty?`style="${sty}"`:''}><div class="dh"><b>${label}</b><span class="muted">${tot} slag${tot?` · gennemsnit ${String(Math.round(arr.reduce((a,c,k)=>a+c*(k+1),0)/tot*100)/100).replace('.',',')}`:''}</span></div>
+    <div class="dbars">${arr.map((c,k)=>{const pct=tot?c/tot*100:0; return `<div class="dbar" title="${k+1}'ere: ${c} (${Math.round(pct)} %)"><span class="dv">${c}</span><i style="height:${tot?Math.max(2,c/mx*100):0}%"></i><span class="dk">${dieHtml(k+1,'mini')}</span><span class="dp">${Math.round(pct)} %</span></div>`}).join('')}</div></div>`;
+}
+function renderDice(){
+  const g=S&&S.dice?S.dice:{}, sum=[0,0,0,0,0,0]; Object.values(g).forEach(a=>a.forEach((c,k)=>sum[k]+=c));
+  const all=[0,0,0,0,0,0]; R.seats.forEach(rs=>(rs.dice||[]).forEach((c,k)=>all[k]+=c));
+  const live=S&&!S.over&&!R.recorded?.includes(S.gameId); if(live) sum.forEach((c,k)=>all[k]+=c);
+  $('#rulesOverlay').innerHTML=`<div class="panel rules" role="dialog" aria-modal="true" aria-labelledby="diceTitle">
+    <div class="rhead"><div><h2 id="diceTitle">Terningstatistik</h2><div class="muted">Hvor tit hvert øjental er slået. Alle slag tæller, også omslag og boosterterninger. Ved en fair terning ligger hvert øjental omkring 16,7 %, men over få slag svinger det meget.</div></div><button class="btn small" data-act="closerules">Luk</button></div>
+    ${S?`<h3>Dette spil</h3>${diceBars(sum,'Alle hold')}<div class="dgrid">${S.teams.map((t,ti)=>diceBars(g[ti]||[0,0,0,0,0,0],esc(t.name),seatStyle(t.seat))).join('')}</div>`:''}
+    <h3>Alle spil på denne skærm</h3>${diceBars(all,'Alle hold')}
+    <div class="dgrid">${R.seats.filter(rs=>rs.dice&&rs.dice.some(Boolean)).map((rs,i)=>diceBars(rs.dice,esc(rs.name),seatStyle(R.seats.indexOf(rs)))).join('')}</div>
+  </div>`;
+}
 function renderBook(){
   const seats=[0,1,2,3].filter(s=>R.seats[s].stats||R.seats[s].games);
   const rows=seats.map(s=>({s,rs:R.seats[s],st:R.seats[s].stats||{games:0,wins:0,places:[0,0,0,0],points:0,knocks:0,knocked:0,goals:0,homeruns:0}})).sort((a,b)=>b.st.points-a.st.points||b.st.wins-a.st.wins);
@@ -3870,11 +3946,13 @@ document.addEventListener('click',e=>{
     case 'takeover': {const ti=+b.dataset.t; return act0(()=>{S.teams[ti].ai=true; log(`Computeren overtager ${S.teams[ti].name}.`,ti)})}
     case 'level': levelUp(); break;
     case 'tosetup': {UI.undo=null;
-      if(S&&!S.over&&UI.confirm!=='tosetup'){UI.confirm='tosetup'; break}
+      if(S&&!S.over&&isOnline()&&UI.confirm!=='tosetup'){UI.confirm='tosetup'; break}
       UI.confirm=null; clearTimeout(UI.timer);
-      if(isOnline()){unsubGame(); forgetOnline()} else clearSave();
+      if(isOnline()){unsubGame(); forgetOnline()} else if(S&&!S.over) saveGame(); else clearSave();
       stopAnim(); S=null; UI.screen='setup'; break}
-    case 'continue': {const g=savedGame(); if(!g) break; unsubGame(); stopAnim(); S=g.S; UI.undo=null; UI.animSeen=S.anim?S.anim.seq:null; UI.rollSeen=S.rollSeq||0; UI.popSeen=S.popSeq||0; UI.leveled=false; UI.screen='game'; app.innerHTML=''; break}
+    case 'delsave': {const id=b.dataset.id; if(UI.confirm!=='del'+id){UI.confirm='del'+id; break} UI.confirm=null; clearSave(id); break}
+    case 'continue': {const g=savedGame(b.dataset.id); if(!g) break; unsubGame(); stopAnim(); S=g.S; UI.undo=null; UI.animSeen=S.anim?S.anim.seq:null; UI.rollSeen=S.rollSeq||0; UI.popSeen=S.popSeq||0; UI.leveled=false; UI.screen='game'; app.innerHTML=''; break}
+    case 'dicestats': {UI.menuOpen=false; const m=$('#tbmenu'); if(m) m.open=false} renderDice(); $('#rulesOverlay').hidden=false; $('#rulesOverlay .btn').focus(); return;
     case 'heltebog': renderBook(); $('#rulesOverlay').hidden=false; $('#rulesOverlay .btn').focus(); return;
     case 'resetbook': {if(UI.confirm!=='resetbook'){UI.confirm='resetbook'; renderBook(); return} UI.confirm=null; R.seats.forEach(rs=>{rs.stats=null; rs.history=[]; rs.games=0; rs.pieces.forEach(p=>p.st=null)}); saveRoster(); renderBook(); return}
     case 'optai': R.opts.aiLevel=b.dataset.v; saveRoster(); break;
@@ -3890,10 +3968,11 @@ document.addEventListener('click',e=>{
     case 'join': UI.onlineMsg=''; joinGame(b.dataset.code,+b.dataset.s); return;
     case 'resume': UI.onlineMsg=''; subscribeGame(b.dataset.code); break;
     case 'leave': leaveLobby(); return;
+    case 'claim': UI.onlineMsg=''; claimSeat(b.dataset.code,+b.dataset.s); return;
     case 'copylink': {const l=b.dataset.link; try{navigator.clipboard.writeText(l).then(()=>{b.textContent='Kopieret ✓'},()=>{})}catch(e){} return}
     case 'seatkind': setSeatKind(+b.dataset.s,b.dataset.v); return;
     case 'ostart': startOnline(); return;
-    case 'rules': UI.menuOpen=false; renderRules(); $('#rulesOverlay').hidden=false; $('#rulesOverlay .btn').focus(); return;
+    case 'rules': {UI.menuOpen=false; const m=$('#tbmenu'); if(m) m.open=false} renderRules(); $('#rulesOverlay').hidden=false; $('#rulesOverlay .btn').focus(); return;
     case 'closerules': $('#rulesOverlay').hidden=true; return;
     case 'view': {
       UI.view=UI.view==='3d'?'2d':'3d'; try{localStorage.setItem('helteludo.visning2',UI.view)}catch(e){}

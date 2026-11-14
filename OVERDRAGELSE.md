@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 50.
+- Filen `helteludo.html` i denne mappe er identisk med version 51.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -282,3 +282,13 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
   - 15 ture på skift.
   - Værten lukkede siden og kom tilbage, og spillet fortsatte.
   - Testspillet blev slettet bagefter.
+
+## Feedback-runde 2 (version 51)
+- **Ekstraslag vises tydeligt:** `xroll(p,evne,slag,ok,tekst)` lægger et kort i `S.pops` med evnens mærke, terningens øjental og resultatet (grønt, når det går brikken godt, rødt ellers). Det vises ved brikken i 3,9 s (`showPops`, `.pop.xroll`). Evnerne er Sej og Vatarm (hvert slag, ikke kun ved succes), Pacifist, Bersærk og Hypnotisør (et slag pr. brik), Hovmodig, Ingen stedsans, Booster, Heldig og Uheldig.
+- **Skjoldene i 2D følger banen:** `tokenTurn(p)` drejer brikkens skjold, så spidsen peger mod næste felt (også i målvejen og i luften). Hjemme, i mål og i en modstanders målområde står det lige. Drejningen glider (`transition: rotate`).
+- **Terningstatistik:** hvert slag tælles pr. hold i `S.dice[holdindeks]` (`countDie`), også omslag og boosterterninger. Når spillet registreres, lægges tallene til `R.seats[s].dice`. Vinduet `renderDice()` (☰ Menu → »🎲 Terningstatistik« og knappen på opstillingen) viser søjler pr. øjental for dette spil og alle spil på skærmen, i alt og pr. hold, med antal, procent og gennemsnit. Slutskærmen viser spillets fordeling.
+- **Gemte spil:**
+  - Op til 8 igangværende lokale spil gemmes under hver sit spil-id (`helteludo.gemte`; det gamle `helteludo.spil` flyttes over automatisk).
+  - »Afbryd spillet« hedder nu »Gem og gå til opstillingen« og gemmer i stedet for at slette.
+  - Opstillingen viser listen »Gemte spil« med hold, tidspunkt, brikker i mål og tur, og knapperne »Fortsæt« og »Slet« (slet kræver et klik mere). Et afsluttet spil fjernes.
+- **Online, vend tilbage fra en anden enhed:** uden for claude.ai hører en plads til browserens spiller-id. Skriver man samme navn på en ny enhed, viser listen over spil i gang »Fortsæt som NAVN«. `claimSeat` flytter pladsen (og værtsrollen) til det nye id og øger `rev`, så alle skærme opdaterer. Spil i gang vises i listen i 48 timer (før 12).
