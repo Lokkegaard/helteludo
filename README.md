@@ -15,4 +15,4 @@ Bygget efter reglerne af Mette Finderup og Kristoffer Apollo.
 
 ## Online-spil
 
-Vælg **Online**, skriv dit navn og opret et spil. Send koden eller linket til de andre, så de kan deltage fra deres egen enhed. Spillet kører i værtens browser, og de andre forbinder sig direkte til værten (via PeerJS), så værten skal have siden åben, mens I spiller. Enkelte skole- og firmanetværk kan blokere den direkte forbindelse.
+Vælg **Online**, skriv dit navn og opret et spil, eller vælg et åbent spil på listen. Du kan også sende koden eller linket til de andre. Spillet ligger på en server (Supabase), så alle kan spille med fra deres egen enhed, og spillet fortsætter, selv om nogen lukker siden. Opsætningen af serveren står i `server/supabase.sql`.

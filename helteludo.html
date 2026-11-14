@@ -1371,6 +1371,60 @@ function saveGame(){if(!S||isOnline()) return; try{localStorage.setItem(SAVE_KEY
 function savedGame(){try{const j=JSON.parse(localStorage.getItem(SAVE_KEY)); return j&&j.S&&!j.S.over?j:null}catch(e){return null}}
 function clearSave(){try{localStorage.removeItem(SAVE_KEY)}catch(e){}}
 
+/* ---------- Online på en rigtig server: Supabase (database + live-opdateringer) ---------- */
+// Uden for claude.ai bruger online-spil Supabase-projektet »Skolearbejde« (tabellen helteludo_docs, se server/supabase.sql).
+// Adapteren giver samme lille db-API som claude.ai: doc(sti).get/set/delete/acquire/onSnapshot og collection(sti).onSnapshot.
+// Alle må læse; der skrives kun gennem databasefunktionerne helteludo_set/_delete/_acquire. Nøglen er projektets offentlige anon-nøgle.
+const SUPA_URL='https://qdztcvdhyfowcfwdefhq.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkenRjdmRoeWZvd2Nmd2RlZmhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQwMzgxMDEsImV4cCI6MjEwOTYxNDEwMX0.49NH4U3IMU7PnFUQ0y3nI-gGLQpUj43biAgyiKoDId8';
+const SUPA_SRC='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+let SUPA=null;
+async function loadSupa(){
+  if(SUPA) return SUPA;
+  if(!(window.supabase&&window.supabase.createClient)) await loadScript(SUPA_SRC);
+  SUPA=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:false,autoRefreshToken:false},realtime:{params:{eventsPerSecond:20}}});
+  return SUPA;
+}
+const supaParent=p=>p.split('/').slice(0,-1).join('/');
+async function supaRow(path){const {data,error}=await SUPA.from('helteludo_docs').select('data').eq('path',path).maybeSingle(); if(error) throw error; return data&&data.data!=null?data.data:null}
+async function supaRpc(fn,args){const {data,error}=await SUPA.rpc(fn,args); if(error) throw error; return data}
+let supaSeq=0;
+// Live-abonnement: en kanal pr. abonnement; ved hver ændring hentes dokumentet igen (så store dokumenter ikke afhænger af beskedstørrelsen).
+function supaWatch(filter,onChange){
+  const ch=SUPA.channel('hl'+(++supaSeq)+'-'+Math.random().toString(36).slice(2,6));
+  ch.on('postgres_changes',{event:'*',schema:'public',table:'helteludo_docs',filter},()=>onChange());
+  // Sletninger kan ikke filtreres; de kommer uden filter og tjekkes på stien.
+  ch.on('postgres_changes',{event:'DELETE',schema:'public',table:'helteludo_docs'},()=>onChange());
+  ch.subscribe(st=>{if(st==='SUBSCRIBED') onChange()});
+  return ()=>{try{SUPA.removeChannel(ch)}catch(e){}};
+}
+const SUPADB={
+  doc(path){return {
+    get:async()=>{const d=await supaRow(path); return docSnap(d!=null,d)},
+    set:async d=>{await supaRpc('helteludo_set',{p_path:path,p_data:d})},
+    delete:async()=>{await supaRpc('helteludo_delete',{p_path:path})},
+    acquire:async o=>({acquired:!!(await supaRpc('helteludo_acquire',{p_path:path,p_holder:o.holder,p_ttl_ms:o.ttlMs||5000}))}),
+    onSnapshot:(cb,err)=>{let busy=false,again=false,dead=false,first=true;
+      const pull=async()=>{if(dead) return; if(busy){again=true; return} busy=true;
+        try{const d=await supaRow(path); if(!dead) cb(docSnap(d!=null,d))}catch(e){if(first&&err) err(e)} first=false; busy=false; if(again){again=false; pull()}};
+      const stop=supaWatch('path=eq.'+path,pull);
+      // Sikkerhedsnet, hvis en live-besked går tabt.
+      const iv=setInterval(pull,20000);
+      return ()=>{dead=true; clearInterval(iv); stop()}}
+  }},
+  collection(path){
+    // Listen over spil hentes jævnligt (uden live-abonnement, så store spil-dokumenter ikke sendes til alle).
+    if(path==='games') return {where:(f,op,vals)=>({limit:n=>({onSnapshot:cb=>{let dead=false;
+      const pull=async()=>{if(dead||UI.screen==='game') return; try{const {data,error}=await SUPA.from('helteludo_docs').select('code:data->code,host:data->host,hostName:data->hostName,status:data->>status,seats:data->seats,updated:data->updated,n:data->n').eq('parent','games').not('data','is',null).in('data->>status',vals).order('updated_at',{ascending:false}).limit(n); if(!error&&!dead) cb({docs:(data||[]).map(r=>({id:r.code,data:()=>r}))})}catch(e){}};
+      pull(); const iv=setInterval(pull,8000); return ()=>{dead=true; clearInterval(iv)}}})})};
+    return {onSnapshot:(cb,err)=>{let dead=false,t=null;
+      const pull=async()=>{if(dead) return; try{const {data,error}=await SUPA.from('helteludo_docs').select('path,data').eq('parent',path).not('data','is',null); if(error) throw error; if(!dead) cb({docs:(data||[]).map(r=>({id:r.path.split('/').pop(),data:()=>clone(r.data)}))})}catch(e){}};
+      const soon=()=>{clearTimeout(t); t=setTimeout(pull,300)};
+      const stop=supaWatch('parent=eq.'+path,soon);
+      return ()=>{dead=true; clearTimeout(t); stop()}}};
+  }
+};
+
 /* ---------- Online uden claude.ai: direkte forbindelse mellem browserne (PeerJS) ---------- */
 // Uden for claude.ai (fx på GitHub Pages) er der ingen fælles database. I stedet holder værtens browser spillets
 // dokumenter og efterligner den lille db-API, som online-koden bruger: doc(sti).get/set/delete/acquire/onSnapshot og
@@ -1562,11 +1616,11 @@ function subscribeGame(code,silent){
     if(d.status!=='lobby'&&d.state&&UI.screen!=='game'){UI.screen='game'; app.innerHTML=''}
     fetchNames([d.host,...Object.values(d.seats||{}).map(x=>x.uid)]);
     render();
-  },()=>{UI.onlineMsg=NET.p2p?'Forbindelsen til værten er tabt. Værten skal have spillet åbent.':'Forbindelsen til spillet blev afbrudt. Åbn spillet igen fra listen.'; render()});
+  },()=>{UI.onlineMsg=NET.p2p?'Forbindelsen til værten er tabt. Værten skal have spillet åbent.':NET.mode==='server'?'Forbindelsen til serveren blev afbrudt. Tjek internetforbindelsen.':'Forbindelsen til spillet blev afbrudt. Åbn spillet igen fra listen.'; render()});
 }
 function fetchNames(ids){
   // Direkte forbindelse: navnene står i spillets dokument og læses hver gang (de kan ændre sig, mens folk melder sig til).
-  if(NET.p2p){const d=UI.online&&UI.online.doc; if(d){if(d.host&&d.hostName) UI.names[d.host]=d.hostName; Object.values(d.seats||{}).forEach(x=>{if(x.uid&&x.name) UI.names[x.uid]=x.name})} return}
+  if(NET.mode!=='claude'){const d=UI.online&&UI.online.doc; if(d){if(d.host&&d.hostName) UI.names[d.host]=d.hostName; Object.values(d.seats||{}).forEach(x=>{if(x.uid&&x.name) UI.names[x.uid]=x.name})} return}
   ids=[...new Set(ids.filter(id=>id&&id!==NET.uid&&!UI.asked[id]))];
   if(!ids.length||!NET.user||!NET.user.profiles) return;
   ids.forEach(id=>UI.asked[id]=1);
@@ -1591,14 +1645,14 @@ function myTeam(s){
 function aiTeam(s){const rs=freshSeat(s); rollSeat(rs,true); return teamData(rs)}
 function newCode(){const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<5;i++) c+=A[Math.floor(Math.random()*A.length)]; return c}
 // Uden claude.ai skal man skrive sit navn, så de andre kan se, hvem de spiller mod.
-function needName(){if(NET.p2p&&!(NET.name||'').trim()){UI.onlineMsg='Skriv dit navn først, så de andre kan se, hvem de spiller mod.'; render(); setTimeout(()=>{const i=document.getElementById('pnamein'); if(i) i.focus()},0); return true} return false}
+function needName(){if(NET.mode!=='claude'&&!(NET.name||'').trim()){UI.onlineMsg='Skriv dit navn først, så de andre kan se, hvem de spiller mod.'; render(); setTimeout(()=>{const i=document.getElementById('pnamein'); if(i) i.focus()},0); return true} return false}
 async function createGame(){
   if(needName()) return;
   const {n,mine,kinds}=UI.oc, seatsArr=SEAT_SETS[n], seats={};
   seatsArr.forEach(s=>{seats[s]=s===mine?{kind:'human',uid:NET.uid,team:myTeam(s),name:NET.name||''}:kinds[s]==='ai'?{kind:'ai',team:aiTeam(s)}:{kind:'open'}});
   const code=newCode();
   try{await NET.db.doc('games/'+code).set({code,host:NET.uid,hostName:NET.name||'',n,status:'lobby',seats,opts:R.opts,created:Date.now(),updated:Date.now(),rev:0,state:null}); subscribeGame(code)}
-  catch(e){UI.onlineMsg=e&&e.code==='invalid_argument'?'Du har ikke adgang til at oprette spil. Ejeren skal dele siden med dig som Bidragyder.':NET.p2p?'Spillet kunne ikke oprettes. Tjek internetforbindelsen, og prøv igen.':'Spillet kunne ikke oprettes. Prøv igen.'}
+  catch(e){UI.onlineMsg=e&&e.code==='invalid_argument'?'Du har ikke adgang til at oprette spil. Ejeren skal dele siden med dig som Bidragyder.':NET.mode!=='claude'?'Spillet kunne ikke oprettes. Tjek internetforbindelsen, og prøv igen.':'Spillet kunne ikke oprettes. Prøv igen.'}
   render();
 }
 async function joinGame(code,seat){
@@ -1618,7 +1672,7 @@ async function joinGame(code,seat){
     });
     UI.onlineMsg=msg;
     if(!msg||msg.startsWith('Spillet er fuldt')) subscribeGame(code);
-  }catch(e){UI.onlineMsg=NET.p2p?'Kunne ikke få forbindelse til værten. Tjek koden, og at værten har spillet åbent.':'Kunne ikke deltage. Prøv igen.'}
+  }catch(e){UI.onlineMsg=NET.p2p?'Kunne ikke få forbindelse til værten. Tjek koden, og at værten har spillet åbent.':NET.mode==='server'?'Kunne ikke deltage. Tjek internetforbindelsen, og prøv igen.':'Kunne ikke deltage. Prøv igen.'}
   render();
 }
 async function leaveLobby(){
@@ -1788,7 +1842,7 @@ function renderOnline(){
   const o=UI.online;
   if(o&&o.doc&&o.doc.status==='lobby') return `<div class="online">${lobbyHtml(o.doc)}</div>`;
   if(o&&!o.doc) return `<div class="online"><div class="panel opanel"><p>Henter spillet…</p></div></div>`;
-  const nameField=NET.p2p?`<div class="field"><label class="eyebrow" for="pnamein">Dit navn</label><input id="pnamein" data-bind="pname" value="${esc(NET.name||'')}" maxlength="20" autocomplete="nickname" placeholder="Fx Henrik"></div>`:'';
+  const nameField=NET.mode!=='claude'?`<div class="field"><label class="eyebrow" for="pnamein">Dit navn</label><input id="pnamein" data-bind="pname" value="${esc(NET.name||'')}" maxlength="20" autocomplete="nickname" placeholder="Fx Henrik"></div>`:'';
   const ro=NET.canWrite===false?`<div class="note">Du har kun læseadgang til siden, så du kan se med, men ikke spille. Bed ejeren om at dele siden med dig som Bidragyder.</div>`:'';
   const {n,mine,kinds}=UI.oc, set=SEAT_SETS[n];
   const mineOk=set.includes(mine)?mine:set[0];
@@ -1825,9 +1879,9 @@ function lobbyHtml(d){
     ${UI.onlineMsg?`<div class="note err">${esc(UI.onlineMsg)}</div>`:''}
     <div class="eyebrow muted">Spilkode</div>
     <div class="bigcode">${esc(d.code)}</div>
-    ${NET.p2p?`<p>Send koden eller linket til de andre. De åbner siden, vælger <b>Online</b> og skriver koden.</p>
+    ${NET.mode!=='claude'?`<p>Send koden eller linket til de andre. De åbner siden, vælger <b>Online</b> og skriver koden${NET.p2p?'':' – eller finder spillet i listen over åbne spil'}.</p>
     <div class="codein" style="margin-bottom:10px"><input readonly value="${esc(location.origin+location.pathname+'?spil='+d.code)}" aria-label="Link til spillet" onclick="this.select()"><button class="btn" data-act="copylink" data-link="${esc(location.origin+location.pathname+'?spil='+d.code)}">Kopiér link</button></div>
-    ${host?'<p class="muted small"><b>Lad denne side være åben, mens I spiller.</b> Spillet kører i din browser, og de andre er forbundet direkte til dig.</p>':''}`:'<p>Send koden til de andre. De åbner denne side, vælger <b>Online</b> og skriver koden. Alle med adgang kan også se spillet i listen over åbne spil.</p>'}
+    ${host&&NET.p2p?'<p class="muted small"><b>Lad denne side være åben, mens I spiller.</b> Spillet kører i din browser, og de andre er forbundet direkte til dig.</p>':''}`:'<p>Send koden til de andre. De åbner denne side, vælger <b>Online</b> og skriver koden. Alle med adgang kan også se spillet i listen over åbne spil.</p>'}
     <div>${seats.map(s=>{const x=d.seats[s]; return `<div class="seatrow" style="${seatStyle(s)}"><span class="badge">${SEATS[s].name[0]}</span>
       <div style="min-width:0"><div class="nm">${x.team?esc(x.team.name):SEATS[s].name+' hold'} ${x.uid===NET.uid?'<span class="tag me">Dig</span>':''}</div><div class="sub">${occ(x)}${x.uid===d.host?' · vært':''}</div>${x.team?`<div class="chips" style="margin-top:4px">${x.team.pieces.map(p=>abilChips(p.abil)).join('')}</div>`:''}</div>
       ${host&&x.uid!==NET.uid?`<button class="btn small" data-act="seatkind" data-s="${s}" data-v="${x.kind==='ai'?'open':'ai'}">${x.kind==='ai'?'Gør pladsen ledig':x.kind==='open'?'Fyld med computer':'Erstat med computer'}</button>`:'<span></span>'}</div>`}).join('')}</div>
@@ -3941,7 +3995,11 @@ async function connect(code){
       if(user){NET.uid=await user.id(); try{NET.canWrite=await user.can('data.write')}catch(e){}}
     }
   }catch(e){}
-  if(!NET.db){NET.p2p=true; NET.db=P2PDB; NET.user=P2PUSER; NET.uid=p2pId(); NET.canWrite=true; try{NET.name=localStorage.getItem('helteludo.navn')||''}catch(e){NET.name=''}}
+  if(NET.db) NET.mode='claude';
+  else {
+    try{await loadSupa(); NET.db=SUPADB; NET.mode='server'}catch(e){NET.db=P2PDB; NET.p2p=true; NET.mode='p2p'}
+    NET.user=P2PUSER; NET.uid=p2pId(); NET.canWrite=true; try{NET.name=localStorage.getItem('helteludo.navn')||''}catch(e){NET.name=''}
+  }
   NET.ready=true;
   if(!code&&!UI.online&&NET.db&&NET.uid){const rc=rememberedOnline(); if(rc){UI.mode='online'; subscribeGame(rc,true); render(); return}}
   if(code&&NET.db&&NET.uid){UI.mode='online'; subscribeGame(code)}

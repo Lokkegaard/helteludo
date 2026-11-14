@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 49.
+- Filen `helteludo.html` i denne mappe er identisk med version 50.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -259,3 +259,26 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - **Tydeligere farver:** rød `#c62828`, grøn `#21883e`, gul `#f0b400`, blå `#1f5fd1` (og lysere tints).
 - **Navne på online modstandere:** med direkte forbindelse skal man skrive sit navn, før man opretter eller deltager i et spil (`needName`). Navnene læses fra spillets dokument ved hver opdatering (`fetchNames`) og står i stillingsbjælken (`.sc .sp`, skjult under 640 px) og på sedlen.
 - **»Powered by Netlify«** er slået fra i Netlify-projektets indstillinger (`built_with_badge_enabled: false`).
+
+## Online-spil på en rigtig server: Supabase (version 50)
+- Uden for claude.ai (Netlify, GitHub Pages) kører online-spil nu på en server: Supabase-projektet **»Skolearbejde«** (ref `qdztcvdhyfowcfwdefhq`, region eu-central-1), tabellen `public.helteludo_docs`. Opsætningen ligger i `server/supabase.sql` og kan køres igen uden problemer (`supabase db query --linked -f server/supabase.sql` fra en mappe, der er linket til projektet).
+- **Datamodel:** hvert dokument er én række (`path`, `parent`, `data` jsonb, `lock_holder`, `lock_until`, `updated_at`). Stier skal matche `games/KODE` eller `games/KODE/seen/ID`.
+- **Sikkerhed:**
+  - Alle må læse (RLS-politik for `anon`); direkte skrivning er spærret.
+  - Der skrives kun gennem funktionerne `helteludo_set` (højst 400 kB; rydder spil over 2 døgn op), `helteludo_delete` og `helteludo_acquire` (lås med TTL, højst 15 s).
+  - Klienten bruger projektets offentlige anon-nøgle (`SUPA_KEY`), som er lavet til at ligge i browseren.
+- **Klienten** (`SUPADB`) giver samme db-API som claude.ai, så resten af online-koden er uændret:
+  - Dokumenter følges live via Supabase Realtime (`postgres_changes` filtreret på `path`, plus sletninger), og hentes igen ved hver ændring og hvert 20. sekund som sikkerhedsnet.
+  - Samlinger (`seen`) følges på `parent`.
+  - Listen over åbne spil hentes hvert 8. sekund med kun de lette felter, mens man er på opstillingen.
+  - Biblioteket er `@supabase/supabase-js@2.45.4` fra jsDelivr.
+- **Valg af forbindelse** (`connect`, `NET.mode`):
+  - `claude`: i artefaktet bruges claude.ai's database som før.
+  - `server`: Supabase.
+  - `p2p`: den direkte forbindelse fra version 48, kun hvis Supabase-biblioteket ikke kan hentes.
+- **Uden for claude.ai** skal man skrive sit navn. Der er en liste over åbne spil med værtens navn, og spillet fortsætter, selvom værten lukker siden; man kommer direkte tilbage i spillet, når man åbner siden igen.
+- **Testet** med to faner:
+  - Oprette, finde spillet i listen, deltage og starte.
+  - 15 ture på skift.
+  - Værten lukkede siden og kom tilbage, og spillet fortsatte.
+  - Testspillet blev slettet bagefter.
