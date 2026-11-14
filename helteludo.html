@@ -579,6 +579,16 @@ body.fullgame .score{flex-wrap:nowrap; overflow:hidden; justify-content:safe cen
 .cup{position:relative}
 .cup .cuplbl{position:absolute; left:50%; bottom:-6px; translate:-50% 0; white-space:nowrap; padding:2px 9px; border-radius:99px; background:var(--gold); color:var(--ink); border:2px solid var(--ink); font-family:var(--display); font-weight:800; font-size:12px; letter-spacing:.04em; box-shadow:0 2px 0 rgba(0,0,0,.35); pointer-events:none}
 .tray .cup.ready,.hud .cup.ready{margin-bottom:8px}
+/* Feedback-runde: sikre brikker, evner i touchkortet, spillernavne */
+.tok .sb{display:none}
+.tok.safe .sb{display:block; position:absolute; left:-46%; top:-34%; width:80%; aspect-ratio:1; border-radius:50%; background:#f7eedb; border:.22cqw solid var(--ink); box-shadow:0 .15cqw .3cqw rgba(0,0,0,.35); pointer-events:none}
+.tok.safe .sb::after{content:""; position:absolute; inset:16%; background:#2f7d4a; clip-path:polygon(50% 0,100% 14%,96% 52%,50% 100%,4% 52%,0 14%)}
+.pinfo .cabil{display:flex; flex-wrap:wrap; gap:5px}
+.pinfo .cab{display:inline-flex; align-items:center; gap:4px; padding:2px 8px 2px 3px; border-radius:99px; background:var(--paper-2); border:1.5px solid rgba(59,42,26,.4); font-size:12.5px; font-weight:700; color:var(--ink)}
+.pinfo .cab .bimg{width:20px; height:20px}
+.sc .sp{font-size:11.5px; font-weight:700; color:var(--gold); max-width:8em; overflow:hidden; text-overflow:ellipsis}
+.sc.cur .sp{color:var(--muted)}
+@media (max-width:640px){.sc .sp{display:none}}
 </style>
 
 <div class="wrap" id="app"></div>
@@ -587,10 +597,10 @@ body.fullgame .score{flex-wrap:nowrap; overflow:hidden; justify-content:safe cen
 <script>
 /* ---------- Data ---------- */
 const SEATS=[
-  {key:'rod', name:'Rød', hex:'#9b2f2a', ink:'#fbf3df', tint:'#d9a59a', team:'Røde Rabalder', pieces:['Rasmus Rædsel','Rikke Raket','Ruben Rustning','Rosa Rap']},
-  {key:'gron',name:'Grøn',hex:'#2f6b45', ink:'#fbf3df', tint:'#a9c7a8', team:'Grønne Gnister', pieces:['Gustav Gnist','Grete Grum','Gorm Glad','Gitte Gaffel']},
-  {key:'gul', name:'Gul', hex:'#c89a2b', ink:'#2a1f16', tint:'#e6cf8c', team:'Gule Gnavpotter', pieces:['Gunnar Gnav','Gulla Gal','Gylle-Gert','Gry Gummi']},
-  {key:'bla', name:'Blå', hex:'#2c4f86', ink:'#fbf3df', tint:'#a3b5d6', team:'Blå Bøller', pieces:['Bent Bølle','Bodil Bang','Bjarke Bjørn','Bitten Blæst']},
+  {key:'rod', name:'Rød', hex:'#c62828', ink:'#fbf3df', tint:'#f2a69e', team:'Røde Rabalder', pieces:['Rasmus Rædsel','Rikke Raket','Ruben Rustning','Rosa Rap']},
+  {key:'gron',name:'Grøn',hex:'#21883e', ink:'#fbf3df', tint:'#9fd9ab', team:'Grønne Gnister', pieces:['Gustav Gnist','Grete Grum','Gorm Glad','Gitte Gaffel']},
+  {key:'gul', name:'Gul', hex:'#f0b400', ink:'#2a1f16', tint:'#ffe07a', team:'Gule Gnavpotter', pieces:['Gunnar Gnav','Gulla Gal','Gylle-Gert','Gry Gummi']},
+  {key:'bla', name:'Blå', hex:'#1f5fd1', ink:'#fbf3df', tint:'#a6c3f5', team:'Blå Bøller', pieces:['Bent Bølle','Bodil Bang','Bjarke Bjørn','Bitten Blæst']},
 ];
 const SEAT_SETS={2:[0,2],3:[0,1,2],4:[0,1,2,3]};
 // Hvert hold har et symbol ud over farven: flamme, blad, sol og bølge.
@@ -801,6 +811,15 @@ const absOf=p=>relAbs(seatOf(p),p.rel);
 const onBoard=q=>q.state==='track'&&!q.raid&&q.rel>=-1&&q.rel<=B.LAST;
 const visibleAt=(a,ex)=>allPieces().filter(q=>q!==ex&&onBoard(q)&&!q.invisible&&absOf(q)===a);
 const extraFace=t=>t.curse||6;
+// I sikkerhed: aura, usynlig, i målområdet, på en globus (ikke et andet holds startfelt) eller i en mur med en holdkammerat.
+function isSafe(p){
+  if(p.state!=='track'||p.raid) return false;
+  if(p.aura||p.invisible||p.rel>B.LAST) return true;
+  if(p.rel<0) return false;
+  const a=absOf(p);
+  if(GLOBE_ABS.has(a)&&!S.teams.some((t,ti)=>ti!==p.team&&13*t.seat===a)) return true;
+  return allPieces().filter(q=>q.team===p.team&&onBoard(q)&&!q.invisible&&absOf(q)===a).length>=2;
+}
 const inPlay=t=>t.pieces.some(p=>['track','regen','air'].includes(p.state));
 const circDist=(a,b)=>Math.min(mod(a-b,B.TL),mod(b-a,B.TL));
 function log(txt, ti){S.log.unshift({txt, ti:ti??null}); if(S.log.length>100) S.log.length=100}
@@ -837,7 +856,9 @@ function startTurn(ti){
   UI.sel=null; UI.hover=null;
   for(const p of t.pieces){
     p.aura=false;
-    if(p.state==='regen'){ if(p.wait>0) p.wait--; else {p.state='track'; log(`${p.name} har regenereret og er tilbage på sit felt.`, p.team)} }
+    if(p.state==='regen'){ if(p.wait>0) p.wait--; else {p.state='track'; log(`${p.name} har regenereret og er tilbage på sit felt.`, p.team);
+      // Står der modstandere på feltet, når brikken vender tilbage, ryger de hjem (som når en brik lander).
+      visibleAt(absOf(p),p).filter(q=>q.team!==p.team&&!q.aura).forEach(q=>{pop(p,`Tilbage! Slår ${q.name} hjem`); log(`${p.name} vender tilbage og slår ${q.name} hjem.`,p.team); sendHome(q,[p])})} }
   }
   for(const p of t.pieces) if(p.state==='air'){
     p.state='track'; p.rel=p.airRel; p.airRel=null; log(`${p.name} lander efter sit højdespring.`, p.team);
@@ -855,7 +876,7 @@ function effMove(p,raw){
 }
 function hovmod(p){
   if(!lv(p,'hovmodig')) return false;
-  return once(p,'hov',()=>{const r=d6(), y=r>=6-lv(p,'hovmodig'); log(`Hovmodig (${p.name}) slår ${r}${y?': den vil lige løbe en omgang til!':' og går pænt mod mål.'}`, p.team); return y});
+  return once(p,'hov',()=>{const r=d6(), y=r>=6-lv(p,'hovmodig'); pop(p,`Hovmodig: slog ${r}${y?' – en omgang til!':' – går mod mål'}`,y?'bad':'info'); log(`Hovmodig (${p.name}) slår ${r}${y?': den vil lige løbe en omgang til!':' og går pænt mod mål.'}`, p.team); return y});
 }
 function walk(p,start,n,dir){
   let rel=start, lap=0, d=dir; const path=[];
@@ -1037,7 +1058,7 @@ function computeOptions(){
     const eff=effMove(p,raw);
     const ns=new Set(); if(eff>=1) ns.add(eff);
     if(lv(p,'stifinder')){if(eff-1>=1) ns.add(eff-1); ns.add(eff+1)}
-    const confused=lv(p,'ingenstedsans')&&ns.size?once(p,'conf',()=>{const r=d6(), y=r>=7-lv(p,'ingenstedsans'); log(`Ingen stedsans (${p.name}) slår ${r}${y?' og er forvirret. Den kan kun gå baglæns.':' og finder vej.'}`,p.team); return y}):false;
+    const confused=lv(p,'ingenstedsans')&&ns.size?once(p,'conf',()=>{const r=d6(), y=r>=7-lv(p,'ingenstedsans'); pop(p,`Ingen stedsans: slog ${r}${y?' – kun baglæns!':' – finder vej'}`,y?'bad':'info'); log(`Ingen stedsans (${p.name}) slår ${r}${y?' og er forvirret. Den kan kun gå baglæns.':' og finder vej.'}`,p.team); return y}):false;
     for(const n of ns){
       const tag=n!==eff?`Stifinder ${n>eff?'+1':'−1'}`:'';
       if(confused){addBack(opts,p,n,'Forvirret'); continue}
@@ -1293,6 +1314,9 @@ function aiStep(){
   if(lvl==='let'&&anyMove&&Math.random()<.6){const ms=S.options.map((o,i)=>[o,i]).filter(([o])=>['move','exit','raid','raidmove'].includes(o.kind)); execute(pick(ms)[1]); return}
   const best=S.options.map((o,i)=>[scoreOpt(o),i]).sort((a,b)=>b[0]-a[0])[0];
   if(best[0]<(lvl==='svaer'?5:-40)&&hel>=0&&lvl!=='let'){useReroll(hel); return}
+  // Booster: en ekstra terning til den brik, computeren vil flytte, når den er langt fra mål og ikke er ved at slå nogen hjem.
+  {const bo=S.options[best[1]], bst=bo?acts.findIndex(a=>a.kind==='booster'&&a.pid===bo.pid):-1;
+    if(bst>=0&&lvl!=='let'&&bo.kind==='move'&&!(bo.out&&bo.out.type==='knock')&&pc(bo.pid).rel<B.LAST-8){useReroll(bst); return}}
   if(!anyMove&&best[0]<0){endTurn(); return}
   execute(best[1]);
 }
@@ -1541,6 +1565,8 @@ function subscribeGame(code,silent){
   },()=>{UI.onlineMsg=NET.p2p?'Forbindelsen til værten er tabt. Værten skal have spillet åbent.':'Forbindelsen til spillet blev afbrudt. Åbn spillet igen fra listen.'; render()});
 }
 function fetchNames(ids){
+  // Direkte forbindelse: navnene står i spillets dokument og læses hver gang (de kan ændre sig, mens folk melder sig til).
+  if(NET.p2p){const d=UI.online&&UI.online.doc; if(d){if(d.host&&d.hostName) UI.names[d.host]=d.hostName; Object.values(d.seats||{}).forEach(x=>{if(x.uid&&x.name) UI.names[x.uid]=x.name})} return}
   ids=[...new Set(ids.filter(id=>id&&id!==NET.uid&&!UI.asked[id]))];
   if(!ids.length||!NET.user||!NET.user.profiles) return;
   ids.forEach(id=>UI.asked[id]=1);
@@ -1564,7 +1590,10 @@ function myTeam(s){
 }
 function aiTeam(s){const rs=freshSeat(s); rollSeat(rs,true); return teamData(rs)}
 function newCode(){const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c=''; for(let i=0;i<5;i++) c+=A[Math.floor(Math.random()*A.length)]; return c}
+// Uden claude.ai skal man skrive sit navn, så de andre kan se, hvem de spiller mod.
+function needName(){if(NET.p2p&&!(NET.name||'').trim()){UI.onlineMsg='Skriv dit navn først, så de andre kan se, hvem de spiller mod.'; render(); setTimeout(()=>{const i=document.getElementById('pnamein'); if(i) i.focus()},0); return true} return false}
 async function createGame(){
+  if(needName()) return;
   const {n,mine,kinds}=UI.oc, seatsArr=SEAT_SETS[n], seats={};
   seatsArr.forEach(s=>{seats[s]=s===mine?{kind:'human',uid:NET.uid,team:myTeam(s),name:NET.name||''}:kinds[s]==='ai'?{kind:'ai',team:aiTeam(s)}:{kind:'open'}});
   const code=newCode();
@@ -1574,6 +1603,7 @@ async function createGame(){
 }
 async function joinGame(code,seat){
   code=String(code||'').trim().toUpperCase(); if(!code) return;
+  if(needName()) return;
   const ref=NET.db.doc('games/'+code);
   try{
     let msg='';
@@ -1892,11 +1922,11 @@ function renderTokens(){
   }
   for(const p of allPieces()){
     let el=document.getElementById('tok-'+p.id);
-    if(!el){el=document.createElement('button'); el.id='tok-'+p.id; el.dataset.act='tok'; el.dataset.pid=p.id; el.innerHTML=shieldSvg(p); box.appendChild(el)}
+    if(!el){el=document.createElement('button'); el.id='tok-'+p.id; el.dataset.act='tok'; el.dataset.pid=p.id; el.innerHTML=shieldSvg(p)+'<i class="sb" aria-hidden="true"></i>'; box.appendChild(el)}
     const g=groups[pos[p.id].key], k=g.indexOf(p), n=g.length, [dy,dx]=offset(k,n), [y,x]=pos[p.id].pt, s=seatOf(p);
     if(!UI.animating){el.style.left=((x+dx)/15*100)+'%'; el.style.top=((y+dy)/15*100)+'%'}
     el.style.setProperty('--c',SEATS[s].hex); el.style.setProperty('--cink',SEATS[s].ink);
-    el.className='tok'+(n>1?' small':'')+(movable.has(p.id)?' can':'')+(UI.sel===p.id?' sel':'')+(p.aura?' aura':'')+(p.invisible?' invis':'')+(p.frozen>0?' frozen':'')+(p.state==='regen'?' regen':'')+(p.state==='air'?' air':'')+(UI.animating&&UI.animPid===p.id?' stepping':'');
+    el.className='tok'+(n>1?' small':'')+(movable.has(p.id)?' can':'')+(UI.sel===p.id?' sel':'')+(p.aura?' aura':'')+(p.invisible?' invis':'')+(p.frozen>0?' frozen':'')+(p.state==='regen'?' regen':'')+(p.state==='air'?' air':'')+(isSafe(p)?' safe':'')+(UI.animating&&UI.animPid===p.id?' stepping':'');
     el.title=`${p.name} · ${S.teams[p.team].name}`;
     el.setAttribute('aria-label',`${p.name}, ${S.teams[p.team].name}${movable.has(p.id)?', kan flytte':''}`);
     el.tabIndex=0; el.setAttribute('aria-haspopup','dialog');
@@ -2703,6 +2733,13 @@ V3D.resize=function(){
   if(!V3D.userMoved) V3D.applyCam(V3D.camMode,true);
 };
 // Liv på 3D-bordet: lava og krusninger i baserne, ildfluer, røg, fugle og blafrende bannere.
+// Skjoldmærke (🛡) til brikker i sikkerhed.
+const safeTex=(()=>{let t=null; return ()=>{if(t) return t; const c=cvs(128,128), x=c.getContext('2d');
+  x.beginPath(); x.arc(64,64,58,0,Math.PI*2); x.fillStyle='#f7eedb'; x.fill(); x.lineWidth=8; x.strokeStyle='#3b2a1a'; x.stroke();
+  x.beginPath(); x.moveTo(64,24); x.lineTo(96,36); x.lineTo(94,66); x.quadraticCurveTo(90,92,64,106); x.quadraticCurveTo(38,92,34,66); x.lineTo(32,36); x.closePath();
+  x.fillStyle='#2f7d4a'; x.fill(); x.lineWidth=6; x.stroke();
+  x.beginPath(); x.moveTo(48,64); x.lineTo(60,77); x.lineTo(82,51); x.strokeStyle='#f7eedb'; x.lineWidth=9; x.lineCap='round'; x.lineJoin='round'; x.stroke();
+  return t=tex3(c)}})();
 const glowTex=(()=>{let t=null; return ()=>{if(t) return t; const c=cvs(64,64), x=c.getContext('2d'), g=x.createRadialGradient(32,32,0,32,32,32);
   g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.35,'rgba(255,255,255,.55)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.fillRect(0,0,64,64); return t=tex3(c)}})();
 V3D.buildLife=function(){
@@ -2816,9 +2853,12 @@ V3D.setTeams=function(){
     glow.position.y=.6; glow.scale.setScalar(1.7); glow.visible=false; glow.raycast=()=>{};
     const halo=new THREE.Mesh(new THREE.PlaneGeometry(2.5,2.5),new THREE.MeshBasicMaterial({map:glowTex(),color:col('#ffae00'),transparent:true,opacity:0,depthWrite:false}));
     halo.rotation.x=-Math.PI/2; halo.position.y=.045; halo.visible=false; halo.raycast=()=>{};
-    g.add(holder,ring,glow,halo); g.userData.pid=p.id; V3D.scene.add(g);
+    // Skjold over brikken, når den er i sikkerhed.
+    const safe=new THREE.Sprite(new THREE.SpriteMaterial({map:safeTex(),transparent:true,depthWrite:false,depthTest:false}));
+    safe.position.y=2.05; safe.scale.setScalar(.55); safe.visible=false; safe.raycast=()=>{}; safe.renderOrder=5;
+    g.add(holder,ring,glow,halo,safe); g.userData.pid=p.id; V3D.scene.add(g);
     const an=(rig.sprite?dressBadges(p,rig):dressPiece(p,rig.body,rig)).concat(rig.an);
-    V3D.pieces[p.id]={g,holder,rig,ring,glow,halo,an,mats:rig.mats,pos:null,tw:null,state:{},yaw:0,phase:0};
+    V3D.pieces[p.id]={g,holder,rig,ring,glow,halo,safe,an,mats:rig.mats,pos:null,tw:null,state:{},yaw:0,phase:0};
   });
 };
 // Hvor brikken skal stå: [y,x]-punktet plus højden af det, den står på.
@@ -2832,7 +2872,7 @@ V3D.sync=function(groups,pos,movable){
     o.dance=!!(V3D.party&&S.over&&p.team===V3D.party.team);
     if(o.dance){const a=p.idx/4*Math.PI*2+.4; tgt=new THREE.Vector3(Math.cos(a)*1.05,.1,Math.sin(a)*1.05)}
     if(!S.over) V3D.party=null;
-    o.state={can:movable.has(p.id),sel:UI.sel===p.id,aura:p.aura,invis:p.invisible,regen:p.state==='regen',frozen:p.frozen>0,small:n>1};
+    o.state={can:movable.has(p.id),sel:UI.sel===p.id,aura:p.aura,invis:p.invisible,regen:p.state==='regen',frozen:p.frozen>0,small:n>1,safe:isSafe(p)};
     if(!o.pos){o.pos=tgt.clone(); o.g.position.copy(tgt); continue}
     if(UI.animating) continue;
     if(o.tw||o.pos.distanceTo(tgt)<.01) continue;
@@ -2916,7 +2956,8 @@ function abilNote(p,id){
 // Når musen svæver over en brik: et lille kort med brikkens art og evner.
 function hoverCard(pid){
   const el=$('#hovercard'); if(!el) return;
-  if(!pid||!S||UI.info===pid){UI.hoverCardPid=null; el.hidden=true; return}
+  clearTimeout(UI.hoverCardT);
+  if(!pid||!S||UI.info===pid||UI.touch){UI.hoverCardPid=null; el.hidden=true; return}
   let p; try{p=pc(pid)}catch(e){p=null} if(!p){el.hidden=true; return}
   if(UI.hoverCardPid===pid&&!el.hidden) return; UI.hoverCardPid=pid;
   const t=S.teams[p.team], ids=ORDER.filter(id=>p.abil[id]);
@@ -2924,6 +2965,8 @@ function hoverCard(pid){
   el.innerHTML=`<div class="hh"><span class="badge" style="--c:var(--paper-2);--cink:var(--ink)">${ROM[p.idx]}</span><div style="min-width:0"><div class="hn">${esc(p.name)}</div><div class="hk">${esc(figureKind(p).name)} · ${esc(t.name)} · ★ ${fmtHp(p.hp)}</div></div></div>
     ${ids.length?`<ul>${ids.map(id=>{const A=ABIL[id]; return `<li>${BADGES[id]?`<i class="bimg bi-${id}" aria-hidden="true"></i>`:''}<span><b>${esc(A.name)}</b>${A.lvl?` <em>niveau ${p.abil[id]}</em>`:''}${(n=>n?`<span class="anote">${esc(n)}</span>`:'')(abilNote(p,id))}<small>${esc(A.desc)}</small></span></li>`}).join('')}</ul>`:'<p class="hnone">Ingen særlige evner.</p>'}`;
   el.hidden=false; placeInfo(el,p);
+  // Bliver musen stående, forsvinder kortet efter et stykke tid.
+  UI.hoverCardT=setTimeout(()=>hoverCard(null),9000);
 }
 function badgeTip(b,e,ms){
   const el=$('#btip'); if(!el) return;
@@ -3026,6 +3069,7 @@ V3D.frame=function(){
     if(o.dance&&!w){const k=t*6+p_idx(o); o.holder.position.y=Math.abs(Math.sin(k))*.28; o.yaw+=dt*3.5; o.holder.rotation.y=o.yaw;
       rg.armL.rotation.z=-2.3+Math.sin(k*1.3)*.4; rg.armR.rotation.z=2.3-Math.sin(k*1.3)*.4; rg.legL.rotation.x=Math.sin(k)*.4; rg.legR.rotation.x=-Math.sin(k)*.4; o.g.scale.setScalar(1)}
     o.ring.material.opacity=st.sel?.95:st.can?.55+Math.sin(t*5)*.3:st.aura?.6:st.frozen?.7:0;
+    if(o.safe){o.safe.visible=!!st.safe&&!w&&!o.dance; if(o.safe.visible) o.safe.position.y=(st.small?1.65:2.05)+(REDUCED?0:Math.sin(t*2+p_idx(o))*.05)}
     if(o.glow){const on=st.can&&!w; o.glow.visible=o.halo.visible=on; if(on){const k=REDUCED?.5:.5+.5*Math.sin(t*4.5+p_idx(o)), z=st.small?.8:1;
       o.glow.material.opacity=.55+.45*k; o.glow.scale.setScalar(2*z*(.9+.15*k)); o.halo.material.opacity=.85+.15*k; o.halo.scale.setScalar(z*(.85+.25*k))}}
     o.ring.material.color.copy(col(st.sel?'#fff8e0':st.aura?'#ffe7a0':st.frozen?'#8fb6dd':'#e8c35a'));
@@ -3096,10 +3140,12 @@ function tapPiece(pid,long){
   const choosing=myHumanTurn()&&S.phase==='choose';
   if(choosing&&!long&&UI.sel&&UI.sel!==pid){const i=targetAt(piecePos(pc(pid)).pt); if(i!=null) return chooseOpt(i)}
   if(long){UI.info=pid; UI.infoFull=true; UI.sel=choosing&&S.options.some(o=>o.pid===pid)?pid:null; render(); return}
-  if(UI.info===pid){UI.info=null; UI.sel=null; render(); return}
-  if(choosing){const {opts,acts}=pieceChoices(pid);
-    if(opts.length===1&&!acts.length&&!(opts[0][0].out&&opts[0][0].out.type==='bounce')) return chooseOpt(opts[0][1]);
+  if(choosing){const {opts,acts}=pieceChoices(pid), one=opts.length===1&&!acts.length&&!(opts[0][0].out&&opts[0][0].out.type==='bounce');
+    // Med mus flytter ét tryk; på en touchskærm viser første tryk brikkens kort med evnerne, og andet tryk flytter.
+    if(one&&(!UI.touch||UI.info===pid)) return chooseOpt(opts[0][1]);
+    if(UI.info===pid){UI.info=null; UI.sel=null; render(); return}
     if(opts.length||acts.length){UI.info=pid; UI.infoFull=false; UI.sel=opts.length?pid:null; render(); return}}
+  if(UI.info===pid){UI.info=null; UI.sel=null; render(); return}
   UI.info=pid; UI.infoFull=true; UI.sel=null; render();
 }
 
@@ -3355,14 +3401,16 @@ function sfx(name){
 }
 function renderInfo(){
   const box=$('#pinfo'); if(!box) return;
-  if(UI.hoverCardPid&&(UI.info===UI.hoverCardPid||UI.animating)) hoverCard(null);
+  if(UI.hoverCardPid&&(UI.info===UI.hoverCardPid||UI.animating||(!V3D.active&&!document.querySelector('.tok:hover')))) hoverCard(null);
   if(!UI.info||!S){box.hidden=true; return}
   let p; try{p=pc(UI.info)}catch(e){p=null}
   if(!p){UI.info=null; box.hidden=true; return}
   if(!UI.infoFull&&myHumanTurn()&&S.phase==='choose'){const {opts,acts}=pieceChoices(p.id); if(opts.length||acts.length){
     box.style.cssText=seatStyle(seatOf(p)); box.classList.add('compact');
-    box.innerHTML=`<div class="ph"><span class="badge" style="--c:var(--paper-2);--cink:var(--ink)">${ROM[p.idx]}</span><div style="min-width:0"><div class="tname">${esc(p.name)}</div><div class="eyebrow">${opts.length>1?'Vælg et træk – eller tryk på feltet':opts.length?'Vælg':'Evne'}</div></div><button class="x" data-act="infofull" aria-label="Vis brikkens art og evner" title="Art og evner">ⓘ</button><button class="x" data-act="closeinfo" aria-label="Luk">×</button></div>
-    <div class="pb">${opts.length?`<div class="opts">${opts.map(([o,i])=>optHtml(o,i)).join('')}</div>`:''}${acts.length?`<div class="acts">${acts.map(actBtn).join('')}</div>`:''}</div>`;
+    const ids=ORDER.filter(id=>p.abil[id]), oneTouch=UI.touch&&opts.length===1&&!acts.length;
+    box.innerHTML=`<div class="ph"><span class="badge" style="--c:var(--paper-2);--cink:var(--ink)">${ROM[p.idx]}</span><div style="min-width:0"><div class="tname">${esc(p.name)}</div><div class="eyebrow">${oneTouch?'Tryk igen på brikken for at flytte':opts.length>1?'Vælg et træk – eller tryk på feltet':opts.length?'Vælg':'Evne'}</div></div><button class="x" data-act="infofull" aria-label="Vis brikkens art og evner" title="Art og evner">ⓘ</button><button class="x" data-act="closeinfo" aria-label="Luk">×</button></div>
+    <div class="pb"><div class="cabil">${ids.length?ids.map(id=>{const A=ABIL[id], n=abilNote(p,id); return `<span class="cab" title="${esc(A.desc+(n?' '+n:''))}">${BADGES[id]?`<i class="bimg bi-${id}" aria-hidden="true"></i>`:''}${esc(A.name)}${A.lvl?` ${p.abil[id]}`:''}</span>`}).join(''):'<span class="muted">Ingen særlige evner</span>'}</div>
+      ${opts.length?`<div class="opts">${opts.map(([o,i])=>optHtml(o,i)).join('')}</div>`:''}${acts.length?`<div class="acts">${acts.map(actBtn).join('')}</div>`:''}</div>`;
     box.hidden=false; placeInfo(box,p); return}}
   box.classList.remove('compact');
   const t=S.teams[p.team], s=t.seat, ids=ORDER.filter(id=>p.abil[id]);
@@ -3480,7 +3528,8 @@ const TIP_KEY='helteludo.tips';
 const TIPS={roll:'Tryk på bægeret for at slå terningen.',choose:'Brikker med gylden aura kan handle. Tryk på en for at flytte den – har den flere muligheder, trykker du på feltet.',
   info:'Hold fingeren nede på en brik – eller tryk ⓘ – for at se dens art og evner.',ability:'En brik kan bruge en evne lige nu. Tryk på knappen med evnens mærke.',
   six:'En 6\'er giver et ekstra slag.',star:'Stjernehop! Lander en brik på en stjerne, springer den videre til den næste.',
-  knock:'Du slog en brik hjem og fik heltepoint (★). Efter spillet bliver heltepoint til nye evner.',menu:'Holdpanel, regler og indstillinger ligger under ☰ Menu. 📜 viser, hvad der er sket.'};
+  knock:'Du slog en brik hjem og fik heltepoint (★). Efter spillet bliver heltepoint til nye evner.',menu:'Holdpanel, regler og indstillinger ligger under ☰ Menu. 📜 viser, hvad der er sket.',
+  safe:'Det grønne skjold betyder, at brikken er i sikkerhed: den kan ikke slås hjem lige nu.'};
 const tipsSeen=(()=>{try{return new Set(JSON.parse(localStorage.getItem(TIP_KEY)||'[]'))}catch(e){return new Set()}})();
 function tip(k){
   if(UI.tip||tipsSeen.has(k)) return; UI.tip=k; tipsSeen.add(k);
@@ -3491,6 +3540,7 @@ function checkTips(){
   if(!S||S.over||UI.screen!=='game'||UI.coach!=null) return;
   if(S.anim&&UI.tipAnim!==S.anim.seq){UI.tipAnim=S.anim.seq; let ap=null; try{ap=pc(S.anim.pid)}catch(e){}
     if(ap&&!S.teams[ap.team].ai&&iControl(ap.team)){if(S.anim.hits&&S.anim.hits.length) tip('knock'); else if(S.anim.jump) tip('star')}}
+  if(allPieces().some(p=>!S.teams[p.team].ai&&iControl(p.team)&&isSafe(p))) tip('safe');
   if(!myHumanTurn()) return;
   if(S.phase==='roll') tip(/'er! Slå igen\.$/.test(S.msg)?'six':'roll');
   if(S.phase==='choose'){if(visibleActs().some(([a])=>a.kind!=='uheldig')) tip('ability'); if(S.options.length) tip(tipsSeen.has('choose')?'info':'choose')}
@@ -3505,7 +3555,8 @@ function renderSide(){
   const side=$('#side'), t=team(), s=t.seat, online=isOnline();
   const nextTi=(()=>{let n=S.cur; for(let k=0;k<S.teams.length;k++){n=(n+1)%S.teams.length; if(!S.finished.includes(n)) return n} return -1})();
   const score=`<div class="score" role="list" aria-label="Stillingen">${S.teams.map((tm,ti)=>{const place=S.finished.indexOf(ti), cur=!S.over&&ti===S.cur, inGoal=tm.pieces.filter(p=>p.state==='goal').length, hp=tm.pieces.reduce((a,p)=>a+p.hp,0);
-    return `<div class="sc${cur?' cur':''}${!S.over&&ti===nextTi&&ti!==S.cur?' next':''}${place>=0?' done':''}" role="listitem" style="${seatStyle(tm.seat)}" title="${esc(tm.name)}${cur?' · har turen':''} · ${inGoal} af 4 i mål · ${fmtHp(hp)} heltepoint">${symSvg(tm.seat)}<span class="sn">${esc(tm.name)}</span><span class="dots" aria-hidden="true">${tm.pieces.map(p=>`<i${p.state==='goal'?' class="on"':''}></i>`).join('')}</span><span class="shp">★ ${fmtHp(hp)}</span>${tm.curse?`<span class="scurse" title="Forbandet: ${esc(tm.name)} slår ekstra på ${tm.curse}'ere i stedet for 6'ere">☠${tm.curse}</span>`:''}${place>=0?`<span class="pl">${place+1}.</span>`:''}</div>`}).join('')}</div>`;
+    const pl=isOnline()&&!tm.ai&&tm.uid?(tm.uid===NET.uid?'Dig':(UI.names[tm.uid]||'Online spiller')):'';
+    return `<div class="sc${cur?' cur':''}${!S.over&&ti===nextTi&&ti!==S.cur?' next':''}${place>=0?' done':''}" role="listitem" style="${seatStyle(tm.seat)}" title="${esc(tm.name)}${pl?' · '+esc(pl):''}${cur?' · har turen':''} · ${inGoal} af 4 i mål · ${fmtHp(hp)} heltepoint">${symSvg(tm.seat)}<span class="sn">${esc(tm.name)}</span>${pl?`<span class="sp">${esc(pl)}</span>`:''}<span class="dots" aria-hidden="true">${tm.pieces.map(p=>`<i${p.state==='goal'?' class="on"':''}></i>`).join('')}</span><span class="shp">★ ${fmtHp(hp)}</span>${tm.curse?`<span class="scurse" title="Forbandet: ${esc(tm.name)} slår ekstra på ${tm.curse}'ere i stedet for 6'ere">☠${tm.curse}</span>`:''}${place>=0?`<span class="pl">${place+1}.</span>`:''}</div>`}).join('')}</div>`;
   const leave=S.over?(online?'Tilbage til online':'Til holdopstilling'):UI.confirm==='tosetup'?(online?'Klik igen for at forlade':'Klik igen for at afbryde'):(online?'Forlad spillet':'Afbryd spillet');
   const gmenu=`<details class="tbmenu" id="tbmenu" ${UI.menuOpen?'open':''}><summary class="btn ghost small" aria-label="Menu">☰<span class="ml"> Menu</span></summary><div class="tbpop panel">
     ${S.over?'':`<button class="btn small" data-act="side" aria-pressed="${UI.side}">${UI.side?'Skjul holdpanelet':'Vis holdpanelet'}</button>`}
@@ -3814,6 +3865,9 @@ function startLocal(){
   newGame(seats.map(s=>({seat:s,...teamData(R.seats[s]),ai:!!R.seats[s].ai,uid:null})),R.opts); saveGame();
   UI.screen='game'; UI.logOpen=false; UI.menuOpen=false; app.innerHTML='';
 }
+// Hvilken slags pegeredskab blev sidst brugt (touch eller mus)? Et tryk skjuler også svævekortet og mærke-tippet.
+document.addEventListener('pointerdown',e=>{UI.touch=e.pointerType!=='mouse'; hoverCard(null);
+  if(!(e.target.closest&&e.target.closest('canvas'))){UI.tipHold=false; const bt=$('#btip'); if(bt) bt.hidden=true}},true);
 // Langt tryk på en brik (2D): vis dens evner.
 document.addEventListener('pointerdown',e=>{const tk=e.target.closest&&e.target.closest('.tok'); if(!tk) return; clearTimeout(UI.lpT); UI.lpFired=false;
   UI.lpT=setTimeout(()=>{UI.lpFired=true; tapPiece(tk.dataset.pid,true)},480)},true);

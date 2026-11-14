@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 48.
+- Filen `helteludo.html` i denne mappe er identisk med version 49.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -248,3 +248,14 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - Manuel udgivelse, hvis det skulle blive nødvendigt: `mkdir -p dist && cp index.html helteludo.html dist/ && netlify deploy --prod --dir dist --site 357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263 --no-build`.
 - Online-spil bruger den direkte forbindelse fra version 48, så alle kan spille online uden login. Spillere på Netlify- og GitHub-siden kan være med i det samme spil, fordi PeerJS-id'erne er fælles.
 - En server med Netlify Functions blev fravalgt: spillet skulle spørge serveren ca. hvert sekund fra hver spiller, og det ville bruge den gratis kvote op efter få timers spil om måneden.
+
+## Feedback-runde 1 (version 49)
+- **Booster:** computeren brugte aldrig Booster, kun Heldig. Nu bruger `aiStep` Booster på den brik, den vil flytte, når brikken er mere end 8 felter fra sidste banefelt, og trækket ikke slår nogen hjem (ikke på niveauet Let). For mennesker virkede Booster allerede (testet: 3 + 6 = 9 felter).
+- **Ingen stedsans og Hovmodig** viser deres slag som en svævende tekst ved brikken (`pop` i `once`-slagene), fx »Ingen stedsans: slog 6 – kun baglæns!«.
+- **Regeneration:** når brikken vender tilbage til sit felt, ryger modstandere på feltet hjem (uden aura), ligesom når en brik lander (`startTurn`). Fortolkning af feedbacken »Regeneration slår hjem«.
+- **Brikker i sikkerhed** (`isSafe`: aura, usynlig, i målområdet, på en globus, der ikke er et andet holds startfelt, eller i en mur) får et grønt skjoldmærke: i 2D `.tok.safe .sb`, i 3D en sprite over figuren (`o.safe`, `safeTex`). Første gang vises et tip (`TIPS.safe`).
+- **Touch:** på en touchskærm (`UI.touch`, sat ved hvert `pointerdown`) viser første tryk på en brik kortet med dens evner og træk; andet tryk på samme brik flytter. Med mus flytter ét tryk som før. Det lille kort viser nu altid brikkens evner som mærker (`.cabil`).
+- **Hængende pop-up:** svævekortet skjules ved ethvert tryk, når musen ikke længere er over en brik, efter 9 sekunder, og vises aldrig efter touch. Mærke-tippet (`#btip`) skjules ved tryk uden for 3D-lærredet.
+- **Tydeligere farver:** rød `#c62828`, grøn `#21883e`, gul `#f0b400`, blå `#1f5fd1` (og lysere tints).
+- **Navne på online modstandere:** med direkte forbindelse skal man skrive sit navn, før man opretter eller deltager i et spil (`needName`). Navnene læses fra spillets dokument ved hver opdatering (`fetchNames`) og står i stillingsbjælken (`.sc .sp`, skjult under 640 px) og på sedlen.
+- **»Powered by Netlify«** er slået fra i Netlify-projektets indstillinger (`built_with_badge_enabled: false`).
