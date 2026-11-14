@@ -217,7 +217,7 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - Projektet ligger offentligt på https://github.com/Lokkegaard/helteludo (gren `main`) og kan spilles på https://lokkegaard.github.io/helteludo/.
 - `index.html` sender videre til `helteludo.html`. `helteludo.html` har nu selv `<meta charset>` og `<meta viewport>` øverst, fordi GitHub Pages ikke tilføjer dem, som artefakt-visningen gør.
 - Online-spil: i artefaktet bruges claude.ai's database; uden for claude.ai (GitHub Pages) bruges direkte forbindelse mellem browserne (version 48).
-- Efter en ændring: publicér artefaktet som før, og skub derefter til GitHub (`git commit` + `git push`). Pages bygger selv siden igen.
+- Efter en ændring: publicér artefaktet som før, og skub derefter til GitHub (`git commit` + `git push`). Både GitHub Pages og Netlify bygger selv siden igen.
 
 ## Knappen »Prøv tegnede figurer« er fjernet (version 46)
 - Knappen på opstillingen og dens handling (`spritedemo`) er fjernet. Man vælger stadig figurstil i 3D under ☰ Menu (»Figurer: tegnede/3D«).
@@ -244,6 +244,7 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 ## Netlify (version 48)
 - Spillet ligger også på https://helteludo.netlify.app/ (Netlify-projekt `helteludo` i teamet »Padel Planner«, site-id `357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263`).
 - `netlify.toml` udgiver kun `index.html` og `helteludo.html` (byggekommando kopierer dem til `dist/`, som ikke er i git).
-- Udgiv en ny version: `mkdir -p dist && cp index.html helteludo.html dist/ && netlify deploy --prod --dir dist --site 357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263 --no-build`. Repositoriet er ikke koblet til Netlify, så et `git push` udgiver ikke af sig selv.
+- **Automatisk udgivelse:** GitHub-repositoriet er koblet til Netlify (gren `main`, Netlifys GitHub-app). Hvert `git push` til `main` bygger og udgiver siden af sig selv med kommandoen fra `netlify.toml`.
+- Manuel udgivelse, hvis det skulle blive nødvendigt: `mkdir -p dist && cp index.html helteludo.html dist/ && netlify deploy --prod --dir dist --site 357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263 --no-build`.
 - Online-spil bruger den direkte forbindelse fra version 48, så alle kan spille online uden login. Spillere på Netlify- og GitHub-siden kan være med i det samme spil, fordi PeerJS-id'erne er fælles.
 - En server med Netlify Functions blev fravalgt: spillet skulle spørge serveren ca. hvert sekund fra hver spiller, og det ville bruge den gratis kvote op efter få timers spil om måneden.
