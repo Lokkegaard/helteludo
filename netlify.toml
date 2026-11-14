@@ -1,0 +1,4 @@
+# Netlify: kun selve spillet udgives (index.html sender videre til helteludo.html).
+[build]
+  command = "mkdir -p dist && cp index.html helteludo.html dist/"
+  publish = "dist"

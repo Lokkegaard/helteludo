@@ -2,7 +2,7 @@
 
 Ludo med rollespilsevner. Hver brik har sine egne evner fra Heltetabellen, Nørdtabellen og Superheltetabellen, og efter hvert spil bliver heltepoint til nye evner.
 
-**Spil i browseren:** https://lokkegaard.github.io/helteludo/
+**Spil i browseren:** https://helteludo.netlify.app/ (også på https://lokkegaard.github.io/helteludo/)
 
 Bygget efter reglerne af Mette Finderup og Kristoffer Apollo.
 

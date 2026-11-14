@@ -240,3 +240,10 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
   - To faner i samme browser deler spiller-id.
 - Testet med to faner på hver sin adresse (127.0.0.1 og localhost): oprettelse, deltagelse via link, start, 21 ture på skift, værten genindlæste midt i spillet (medspilleren var forbundet igen efter 0,3 s), og en forkert kode gav en besked.
 - I artefaktet på claude.ai bruges stadig claude.ai's database; dér er WebRTC ikke tilladt.
+
+## Netlify (version 48)
+- Spillet ligger også på https://helteludo.netlify.app/ (Netlify-projekt `helteludo` i teamet »Padel Planner«, site-id `357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263`).
+- `netlify.toml` udgiver kun `index.html` og `helteludo.html` (byggekommando kopierer dem til `dist/`, som ikke er i git).
+- Udgiv en ny version: `mkdir -p dist && cp index.html helteludo.html dist/ && netlify deploy --prod --dir dist --site 357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263 --no-build`. Repositoriet er ikke koblet til Netlify, så et `git push` udgiver ikke af sig selv.
+- Online-spil bruger den direkte forbindelse fra version 48, så alle kan spille online uden login. Spillere på Netlify- og GitHub-siden kan være med i det samme spil, fordi PeerJS-id'erne er fælles.
+- En server med Netlify Functions blev fravalgt: spillet skulle spørge serveren ca. hvert sekund fra hver spiller, og det ville bruge den gratis kvote op efter få timers spil om måneden.
