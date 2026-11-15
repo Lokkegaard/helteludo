@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 55.
+- Filen `helteludo.html` i denne mappe er identisk med version 56.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -335,4 +335,11 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 1. **Terningstatistikken blev talt dobbelt fra runde 2:** `S.dice` føres videre mellem runderne (statistik for hele spillet), men `recordGame` lagde hele `S.dice` til Heltebogen efter hver runde. Nu tæller `countDie` også rundens slag i `S.rdice`, og kun de skrives i Heltebogen (gemte spil fra version 54 uden `S.rdice` bruger `S.dice` i runde 1 og springer over i senere runder).
 2. **Fortryd kunne bruges til at slå om:** slag under selve trækket (Ingen stedsans, Pacifist m.fl.) kunne fortrydes og slås igen. `d6` tæller nu alle slag (`D6N`), og `chooseOpt` fjerner fortryd, hvis der blev slået under trækket.
 - Testet: tre runder med computerhold gav Heltebogen præcis summen af rundernes slag; et træk med Ingen stedsans kunne ikke fortrydes, et almindeligt træk kunne.
-- Ikke rettet (småting fra gennemgangen): Forbandet og Ærkefjende slås om hver runde; første hold starter altid; tælleren i opstigningen tæller nedstigninger med; online kan kun værten fortsætte; opstigning kan i teorien gå i stå, hvis »Vælg selv« ikke har nogen evner tilbage.
+
+## Småting fra gennemgangen af runderne (version 56)
+- **Forbandet og Ærkefjende føres videre:** `nextRound` giver holdets `curse` og brikkens `hates` med i opstillingen af næste runde, og `newGame` slår kun nyt øjental/ny ærkefjende, hvis der ikke er et. Mister brikken evnen, forsvinder virkningen som før.
+- **Det startende hold går på skift:** `S.first=(runde-1) % antal hold`. Holdet slår først i opstigningen (køen sorteres efter `S.first`) og har første tur; loggen skriver »X starter runde N«.
+- **Tælleren i opstigningen** tæller kun slag på Heltetabellen (»slag 1 af 2«); nedstigninger vises for sig.
+- **Online kan en anden spiller fortsætte:** »Næste runde« og »Afslut spillet« må bruges af `canLeadOnline()` – værten, eller den tilstedeværende spiller, der styrer computerholdene (`aiDriver`), når værten er væk. Gemningen tjekker `rev`, så to samtidige klik ikke giver to runder.
+- **»Vælg selv« uden evner tilbage:** har brikken alle evner på højeste niveau, gives ingen ny evne i stedet for en tom liste; `autoValg` vælger blandt alle mulige evner, når de seks foretrukne er brugt op.
+- Testet: fire runder i træk med samme forbandelse og ærkefjende og startende hold 1, 2, 3, 0; uden evnen blev forbandelsen 0; tælleren »slag 1 af 2, slag 2 af 2« og derefter nedstigning; »Vælg selv« med alle evner gik videre; `canLeadOnline` er sand, når værten er væk, og falsk, når værten er til stede.

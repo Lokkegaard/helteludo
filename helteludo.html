@@ -879,9 +879,9 @@ function once(p,k,fn){const key=p.id+k; if(!(key in S.cache)) S.cache[key]=fn();
 function newGame(config,opts,carry){
   const triBoard=config.length===3&&config.every((c,i)=>c.seat===i);
   useBoard(triBoard?'tri':'quad');
-  S={board:triBoard?'tri':'quad', teams:config.map((c,ti)=>({seat:c.seat, name:c.name, curse:0, ai:!!c.ai, uid:c.uid||null,
+  S={board:triBoard?'tri':'quad', teams:config.map((c,ti)=>({seat:c.seat, name:c.name, curse:c.curse||0, ai:!!c.ai, uid:c.uid||null,
       pieces:c.pieces.map((p,i)=>({id:`${ti}-${i}`, team:ti, idx:i, name:p.name, abil:{...p.abil}, kind:p.kind||'', origin:p.origin||null, state:'base', rel:-1, lap:0, hp:0,
-        knocked:false, hasLeft:false, frozen:0, aura:false, invisible:false, wait:0, airRel:null, nemeses:[], hates:null,
+        knocked:false, hasLeft:false, frozen:0, aura:false, invisible:false, wait:0, airRel:null, nemeses:[], hates:p.hates??null,
         used:{heldig:0,booster:0,selv:0,regen:0,uh:{}}, raid:null, st:{knocks:0,knocked:0,goals:0,homeruns:0}}))})),
     rollSeq:0, cur:0, phase:'roll', raw:null, rollsLeft:0, options:[], restrict:null, boost:null, cache:{}, firstGoal:false,
     finished:[], log:[], over:false, msg:'', forced:'', turnId:0, anim:null, opts:clone(opts||DEF_OPTS), gameId:Math.random().toString(36).slice(2,10)};
@@ -893,21 +893,25 @@ function newGame(config,opts,carry){
   allPieces().forEach(p=>{if(KINDS.some(k=>k.id===p.kind)) return; const free=KINDS.filter(k=>!taken.has(k.id)); p.kind=pick(free.length?free:KINDS).id; taken.add(p.kind)});
   S.teams.forEach((t,ti)=>t.pieces.forEach(p=>{
     if(lv(p,'forbandet') && !t.curse){t.curse=d6(); log(`${p.name} er forbandet. ${t.name} slår ekstra på ${t.curse}'ere i stedet for 6'ere.`, ti)}
-    if(lv(p,'aerkefjende')){const opp=S.teams.map((_,i)=>i).filter(i=>i!==ti); p.hates=pick(opp); log(`${p.name} har fået ${S.teams[p.hates].name} som ærkefjende.`, ti)}
+    if(lv(p,'aerkefjende')&&p.hates==null){const opp=S.teams.map((_,i)=>i).filter(i=>i!==ti); p.hates=pick(opp); log(`${p.name} har fået ${S.teams[p.hates].name} som ærkefjende.`, ti)}
   }));
   UI.leveled=false; UI.animSeen=null; UI.rollSeen=0; UI.popSeen=0; UI.undo=null; stopAnim();
   // Hold, der ikke har slået deres evner endnu, slår dem nu på Heltetabellen, før første tur (ét slag ad gangen).
+  // Det hold, der starter, går på skift fra runde til runde (runde 1: første hold); det slår også først på Heltetabellen.
+  S.first=(S.round-1)%S.teams.length;
   S.heroQ=[];
   if(carry&&carry.levelQ) S.heroQ=carry.levelQ;
   else config.forEach((c,ti)=>{const r=c.heroRolls; if(!r) return; const of=r.reduce((a,b)=>a+(b||0),0); r.forEach((n,pi)=>{for(let k=0;k<(n||0);k++) S.heroQ.push({ti,pi,of,type:'gain'})})});
-  if(S.heroQ.length){log(S.round>1?'Opstigning: brikkerne slår for de heltepoint, de fik i sidste runde.':'Heltetabellen: holdene slår deres evner, før spillet går i gang.'); heroNext()} else {S.heroQ=null; startTurn(0)}
+  {const n=S.teams.length, ord=ti=>mod(ti-S.first,n); S.heroQ=S.heroQ.map((x,k)=>[x,k]).sort((a,b)=>ord(a[0].ti)-ord(b[0].ti)||a[1]-b[1]).map(a=>a[0])}
+  if(S.round>1) log(`${S.teams[S.first].name} starter runde ${S.round}.`, S.first);
+  if(S.heroQ.length){log(S.round>1?'Opstigning: brikkerne slår for de heltepoint, de fik i sidste runde.':'Heltetabellen: holdene slår deres evner, før spillet går i gang.'); heroNext()} else {S.heroQ=null; startTurn(S.first)}
 }
 // Heltetabellen i starten af spillet. S.heroQ er de slag, der mangler: {ti (hold), pi (brik), of (holdets antal slag)}.
 function heroNext(){
   const e=S.heroQ&&S.heroQ[0];
-  if(!e){S.heroQ=null; S.heroPick=null; S.heroDice=null; log('Alle evner er slået. Spillet går i gang!'); startTurn(0); return}
+  if(!e){S.heroQ=null; S.heroPick=null; S.heroDice=null; log('Alle evner er slået. Spillet går i gang!'); startTurn(S.first||0); return}
   S.cur=e.ti; S.phase='heroes'; S.raw=null; S.options=[];
-  const t=S.teams[e.ti], p=t.pieces[e.pi], left=S.heroQ.filter(x=>x.ti===e.ti).length;
+  const t=S.teams[e.ti], p=t.pieces[e.pi], left=S.heroQ.filter(x=>x.ti===e.ti&&x.type!=='lose').length;
   S.msg=e.type==='lose'?`Nedstigning: ${p.name} mister et niveau i en tilfældig evne.`:`${S.round>1?'Opstigning':'Heltetabellen'}: slag ${e.of-left+1} af ${e.of} – for ${p.name}.`;
 }
 // Næste runde: samme hold og brikker med de evner, de har nu. Runden starter med opstigning:
@@ -917,8 +921,9 @@ function nextRound(){
   const prev=S, q=[];
   prev.teams.forEach((t,ti)=>{const mine=[]; t.pieces.forEach((p,pi)=>{const n=p.hp>=2?Math.floor(p.hp/2):0, m=p.hp<=-2?Math.floor(-p.hp/2):0;
     for(let k=0;k<n;k++) mine.push({ti,pi,type:'gain'}); for(let k=0;k<m;k++) mine.push({ti,pi,type:'lose'})});
-    mine.forEach(x=>{x.of=mine.length; q.push(x)})});
-  const cfg=prev.teams.map(t=>({seat:t.seat,name:t.name,ai:t.ai,uid:t.uid,pieces:t.pieces.map(p=>({name:p.name,abil:{...p.abil},kind:p.kind,origin:p.origin}))}));
+    const gains=mine.filter(x=>x.type==='gain').length; mine.forEach(x=>{x.of=gains; q.push(x)})});
+  // Forbandelsens øjental og ærkefjenden beholdes, til brikken mister evnen.
+  const cfg=prev.teams.map(t=>({seat:t.seat,name:t.name,ai:t.ai,uid:t.uid,curse:t.pieces.some(p=>lv(p,'forbandet'))?t.curse:0,pieces:t.pieces.map(p=>({name:p.name,abil:{...p.abil},kind:p.kind,origin:p.origin,hates:lv(p,'aerkefjende')?p.hates:null}))}));
   newGame(cfg,prev.opts,{round:(prev.round||1)+1,wins:prev.wins||{},history:prev.history||[],gameId:prev.gameId,dice:prev.dice,popSeq:prev.popSeq||0,rollSeq:prev.rollSeq||0,levelQ:q});
 }
 function endSeries(){if(!S||!S.over||S.ended) return; S.ended=true; log(`Spillet er afsluttet efter ${S.round||1} ${(S.round||1)===1?'runde':'runder'}.`)}
@@ -933,14 +938,14 @@ function heroLose(p){
   log(`${p.name} ${whole?`mister ${ABIL[id].name}`:`mister et niveau i ${ABIL[id].name}`}.`,p.team);
   S.popSeq=(S.popSeq||0)+1; (S.pops=S.pops||[]).push({n:S.popSeq,pt:piecePos(p).pt,txt:`${p.name}: ${whole?'mister':'−1 niveau'} ${ABIL[id].name}`,k:'bad',a:id}); if(S.pops.length>12) S.pops.shift();
 }
-const autoValg=p=>pick(['hurtig','sej','heldig','snigmorder','stjernehopper','turbo'].filter(x=>canGain(p.abil,x)))||null;
+const autoValg=p=>pick(['hurtig','sej','heldig','snigmorder','stjernehopper','turbo'].filter(x=>canGain(p.abil,x)))||pick(ORDER.filter(x=>canGain(p.abil,x)))||null;
 function heroRoll(){
   const e=S.heroQ&&S.heroQ[0]; if(!e||S.heroPick) return;
   if(e.type==='lose'){const p=S.teams[e.ti].pieces[e.pi]; S.heroDice=null; UI.rolledFlash=true; S.rollSeq=(S.rollSeq||0)+1; heroLose(p); S.heroQ.shift(); heroNext(); return}
   const t=S.teams[e.ti], p=t.pieces[e.pi], r=rollAbility(p.abil), m=r.txt.match(/Heltetabel (\d)(\d)/);
   S.heroDice=m?[+m[1],+m[2]]:null; UI.rolledFlash=true; S.rollSeq=(S.rollSeq||0)+1;
   log(`${p.name}: ${r.txt}${r.skipped.length?` (slog om: ${r.skipped.join(', ')})`:''}.`, e.ti);
-  if(r.id==='@valg'&&!t.ai){S.heroPick={pid:p.id}; S.msg=`${p.name} må selv vælge en evne.`; return}
+  if(r.id==='@valg'&&!t.ai&&ORDER.some(x=>canGain(p.abil,x))){S.heroPick={pid:p.id}; S.msg=`${p.name} må selv vælge en evne.`; return}
   heroGain(p,r.id==='@valg'?autoValg(p):r.id, r.txt);
   S.heroQ.shift(); heroNext();
 }
@@ -1732,6 +1737,8 @@ function aiDriver(){
   const humans=[...new Set((S?S.teams:[]).filter(t=>!t.ai&&t.uid).map(t=>t.uid))].filter(alive).sort();
   return humans[0]||o.doc.host;
 }
+// Næste runde og Afslut spillet: værten, eller den spiller, der styrer computerholdene, når værten er væk.
+const canLeadOnline=()=>!!UI.online&&aiDriver()===NET.uid;
 function heartbeat(){const o=UI.online; if(!o||!NET.db||!NET.uid) return; try{NET.db.doc('games/'+o.code+'/seen/'+NET.uid).set({t:Date.now()}).catch(()=>{})}catch(e){}}
 function subscribeGame(code,silent){
   unsubGame();
@@ -3793,7 +3800,7 @@ function renderSide(){
   let main='', mbar='', hud='', tray='';
   const mineTeams=S.teams.filter(tm=>!online||(!tm.ai&&tm.uid===NET.uid));
   if(S.over){
-    const canLead=!online||(UI.online&&UI.online.isHost), rounds=S.round||1, wins=S.wins||{};
+    const canLead=!online||canLeadOnline(), rounds=S.round||1, wins=S.wins||{};
     const standing=S.teams.map((tm,ti)=>[tm,ti,wins[ti]||0]).sort((a,b)=>b[2]-a[2]);
     const standHtml=`<div><div class="eyebrow" style="margin-bottom:6px">Stillingen efter ${rounds} ${rounds===1?'runde':'runder'}</div><ol class="podium">${standing.map(([tm,ti,w])=>`<li style="${seatStyle(tm.seat)}">${symSvg(tm.seat)}${esc(tm.name)}<span class="pl" style="margin-left:auto;white-space:nowrap">🏆 ${w}</span></li>`).join('')}</ol></div>`;
     if(S.ended){
@@ -3812,7 +3819,7 @@ function renderSide(){
         <div><div class="eyebrow">Opstigning til runde ${rounds+1}</div><p class="msg" style="font-weight:600;font-size:13.5px;margin-top:4px">Næste runde starter med opstigning: for hver 2 heltepoint slår brikken én gang på Heltetabellen, for hver 2 minuspoint mister den et niveau i en tilfældig evne. Brikkerne beholder deres evner.</p></div>
         ${S.teams.map(tm=>`<div class="lvtab" style="${seatStyle(tm.seat)}"><div class="rt-h" style="font-size:18px"><span class="sw"></span>${esc(tm.name)}</div>${tm.pieces.map(p=>{const n=p.hp>=2?Math.floor(p.hp/2):0, m=p.hp<=-2?Math.floor(-p.hp/2):0; return `<div class="lvrow"><span class="hp">★ ${fmtHp(p.hp)}</span><span>${esc(p.name)}</span><span class="what">${n?`${n} ${n===1?'slag':'slag'}`:m?`mister ${m}`:'–'}</span></div>`}).join('')}</div>`).join('')}
         ${S.dice?`<button class="btn small" data-act="dicestats">🎲 Terningstatistik</button>`:''}
-        <div class="acts">${canLead?`<button class="btn primary" data-act="nextround">Næste runde (${rounds+1})</button><button class="btn" data-act="endseries">${UI.confirm==='endseries'?'Klik igen for at afslutte spillet':'Afslut spillet'}</button>`:`<span class="msg">Venter på, at værten starter runde ${rounds+1}…</span>`}</div>
+        <div class="acts">${canLead?`<button class="btn primary" data-act="nextround">Næste runde (${rounds+1})</button><button class="btn" data-act="endseries">${UI.confirm==='endseries'?'Klik igen for at afslutte spillet':'Afslut spillet'}</button>`:`<span class="msg">Venter på, at ${UI.online&&alive(UI.online.doc&&UI.online.doc.host)?'værten':'en anden spiller'} starter runde ${rounds+1}…</span>`}</div>
       </div></section>`;
     }
   } else {
@@ -4071,8 +4078,8 @@ document.addEventListener('click',e=>{
     case 'closeinfo': UI.info=null; UI.sel=null; break;
     case 'takeover': {const ti=+b.dataset.t; return act0(()=>{S.teams[ti].ai=true; log(`Computeren overtager ${S.teams[ti].name}.`,ti)})}
     case 'level': levelUp(); break;
-    case 'nextround': if(S&&S.over&&!S.ended&&(!isOnline()||(UI.online&&UI.online.isHost))) return act0(nextRound); break;
-    case 'endseries': {if(!S||!S.over||S.ended||(isOnline()&&!(UI.online&&UI.online.isHost))) break; if(UI.confirm!=='endseries'){UI.confirm='endseries'; break} UI.confirm=null; return act0(endSeries)}
+    case 'nextround': if(S&&S.over&&!S.ended&&(!isOnline()||canLeadOnline())) return act0(nextRound); break;
+    case 'endseries': {if(!S||!S.over||S.ended||(isOnline()&&!canLeadOnline())) break; if(UI.confirm!=='endseries'){UI.confirm='endseries'; break} UI.confirm=null; return act0(endSeries)}
     case 'tosetup': {UI.undo=null;
       if(S&&!S.ended&&isOnline()&&UI.confirm!=='tosetup'){UI.confirm='tosetup'; break}
       UI.confirm=null; clearTimeout(UI.timer);
