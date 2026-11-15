@@ -334,7 +334,6 @@ table.book .sw{display:inline-block; vertical-align:-2px}
 .board.v3d>.trail,.board.v3d>.grid,.board.v3d>.marks,.board.v3d>.tokens,.board.v3d>.fx{visibility:hidden}
 .board canvas.c3d{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab}
 .board canvas.c3d:active{cursor:grabbing}
-.alist .look{font-style:italic; color:var(--oxblood)}
 .alist .abadge{width:30px; height:30px; vertical-align:-9px; margin-right:7px}
 
 /* Effects */
@@ -737,7 +736,7 @@ const REDUCED=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').
 const STEP_MS=150;
 
 let S=null, R=null;
-const UI={figStyle:(()=>{try{return localStorage.getItem('helteludo.figurer')||'tegnet'}catch(e){return 'tegnet'}})(), gfx:(()=>{try{return localStorage.getItem('helteludo.grafik')||'auto'}catch(e){return 'auto'}})(), view:(()=>{try{return localStorage.getItem('helteludo.visning2')==='2d'?'2d':'3d'}catch(e){return '3d'}})(), // 3D er standard; et eget valg huskes side:(()=>{try{return localStorage.getItem('helteludo.menu')==='1'}catch(e){return false}})(), viewMsg:'', screen:'setup', mode:'local', sel:null, hover:null, confirm:null, rolledFlash:false, leveled:false,
+const UI={gfx:(()=>{try{return localStorage.getItem('helteludo.grafik')||'auto'}catch(e){return 'auto'}})(), view:(()=>{try{return localStorage.getItem('helteludo.visning2')==='2d'?'2d':'3d'}catch(e){return '3d'}})(), // 3D er standard; et eget valg huskes side:(()=>{try{return localStorage.getItem('helteludo.menu')==='1'}catch(e){return false}})(), viewMsg:'', screen:'setup', mode:'local', sel:null, hover:null, confirm:null, rolledFlash:false, leveled:false,
   animSeen:null, animating:false, timer:null, committing:false, online:null, gameList:[], listUnsub:null, names:{}, asked:{},
   oc:{n:2, mine:0, kinds:{}}, codeInput:'', onlineMsg:''};
 const NET={ready:false, db:null, user:null, uid:null, canWrite:null};
@@ -749,7 +748,7 @@ UI.text=(()=>{try{return TEXTS[localStorage.getItem('helteludo.tekst')]?localSto
 const aiF=()=>SPEED[UI.speed]||1;
 function menuItems(game){
   const b=(act,label,pressed)=>`<button class="btn small" data-act="${act}"${pressed!=null?` aria-pressed="${pressed}"`:''}>${label}</button>`;
-  return (game&&UI.view==='3d'?b('figstyle',`Figurer: ${UI.figStyle==='tegnet'?'tegnede':'3D'}`):'')+(game?b('gfx',`Grafik: ${({auto:'auto',hoj:'høj',lav:'lav'})[UI.gfx]}`):'')+
+  return (game?b('gfx',`Grafik: ${({auto:'auto',hoj:'høj',lav:'lav'})[UI.gfx]}`):'')+
     b('speed',`Computeren spiller ${SPEED_TXT[UI.speed]}`)+b('textsize',`Tekst: ${TEXT_TXT[UI.text]}`)+
     b('music',MUSIC.on?'Musik: til':'Musik: fra',MUSIC.on)+b('sound',SFX.on?'Lyd: til':'Lyd: fra',SFX.on);
 }
@@ -2297,168 +2296,6 @@ const KINDS=[
 // Hvert hold får fire forskellige arter, og alle 16 brikker i et spil med fire hold er forskellige.
 const KIND_PERM=[0,6,11,13, 1,4,8,14, 2,5,10,12, 3,7,9,15];
 const figureKind=p=>KINDS.find(k=>k.id===p.kind)||KINDS[KIND_PERM[seatOf(p)*4+p.idx]];
-// Figurerne er bygget som malede bordspilsminiaturer: en rund base med holdfarvet kant,
-// et blødt drejet tøjprofil, led i ben og arme, et ansigt med øjne, bryn og smil, og artens kendetegn.
-const V2=(r,y)=>new THREE.Vector2(r,y);
-const lathe=(pts,seg=28)=>new THREE.LatheGeometry(pts.map(([r,y])=>V2(r,y)),seg);
-// Et bøjet, tilspidset rør (horn, haler) lavet af korte stykker langs en række punkter.
-function taper(parent,pts,r0,r1,mat){
-  const n=pts.length-1, up=new THREE.Vector3(0,1,0);
-  for(let i=0;i<n;i++){
-    const a=new THREE.Vector3(...pts[i]), b=new THREE.Vector3(...pts[i+1]), ra=r0+(r1-r0)*i/n, rb=r0+(r1-r0)*(i+1)/n;
-    const m=new THREE.Mesh(new THREE.CylinderGeometry(rb,ra,a.distanceTo(b),12),mat);
-    m.position.copy(a).lerp(b,.5); m.quaternion.setFromUnitVectors(up,b.clone().sub(a).normalize()); m.castShadow=true; parent.add(m);
-    const j=new THREE.Mesh(new THREE.SphereGeometry(rb,12,8),mat); j.position.copy(b); parent.add(j);
-  }
-}
-function buildFigure(p){
-  const seat=SEATS[seatOf(p)], K=figureKind(p), id=K.id, ghost=id==='spoegelse';
-  const mk=(hex,o={})=>{const m=M3(hex,{roughness:.62,...o}); m.transparent=true; return m};
-  const basic=hex=>new THREE.MeshBasicMaterial({color:col(hex),transparent:true});
-  const tunic=mk(seat.hex), trim=mk(seat.tint), skin=mk(K.skin), hair=mk(K.hair||'#3b2a1a'), dark=mk('#1a1410',{roughness:.4});
-  const leather=mk('#5a3a22'), boot=mk('#2e221a',{roughness:.5}), gold=mk('#e8c35a',{metalness:.7,roughness:.3}), white=mk('#fbf8f0',{roughness:.3});
-  const fur=id==='faun'?mk('#6b4a32'):null, bone=mk('#f1ead8');
-  if(ghost){[tunic,skin,trim].forEach(m=>{m.userData.base=.78; m.emissive=col('#2a3550')})}
-  const root=new THREE.Group(), body=new THREE.Group(), an=[]; root.add(body); body.position.y=.07;
-  const add=(par,geo,m,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.castShadow=true; par.add(o); return o};
-  const pivot=(x,y,z)=>{const g=new THREE.Group(); g.position.set(x,y,z); body.add(g); return g};
-  const H=.94; // hovedets midte
-  // Miniaturebase
-  add(root,new THREE.CylinderGeometry(.29,.31,.07,36),mk('#2c241d',{roughness:.5}),0,.035,0);
-  add(root,new THREE.TorusGeometry(.29,.014,8,40),mk(seat.hex,{roughness:.35}),0,.07,0).rotation.x=Math.PI/2;
-  // Ben
-  const legL=pivot(-.075,.36,0), legR=pivot(.075,.36,0);
-  if(!ghost) [legL,legR].forEach(l=>{
-    add(l,new THREE.CylinderGeometry(.056,.046,.26,14),fur||mk(id==='skelet'?'#e8e2d0':'#4a3a2c'),0,-.13,0);
-    if(id==='faun'){add(l,new THREE.CylinderGeometry(.04,.055,.07,10),boot,0,-.3,.01)}
-    else {add(l,new THREE.SphereGeometry(.068,16,12),boot,0,-.3,.03).scale.set(1,.72,1.5); add(l,new THREE.TorusGeometry(.05,.014,8,20),leather,0,-.25,0).rotation.x=Math.PI/2}
-  });
-  // Kjortel (drejet profil), bort, bælte med spænde og krave
-  const robe=id==='troldmand';
-  const torso=add(body,lathe(robe?[[0,.0],[.27,.0],[.26,.06],[.21,.3],[.17,.48],[.165,.56],[.178,.64],[.166,.7],[.12,.745],[.06,.765],[0,.765]]
-    :ghost?[[0,.04],[.24,.04],[.2,.16],[.17,.3],[.158,.48],[.165,.56],[.178,.64],[.166,.7],[.12,.745],[.06,.765],[0,.765]]
-    :[[0,.3],[.2,.3],[.215,.33],[.19,.4],[.155,.48],[.165,.56],[.178,.64],[.166,.7],[.12,.745],[.06,.765],[0,.765]]),tunic);
-  if(ghost){const g=torso.geometry, pos=g.attributes.position; for(let i=0;i<pos.count;i++){if(pos.getY(i)<.08){const a=Math.atan2(pos.getZ(i),pos.getX(i)); pos.setY(i,pos.getY(i)+Math.sin(a*6)*.025)}} g.computeVertexNormals();
-    an.push(t=>{body.position.y=.12+Math.sin(t*2.4+p.idx)*.05})}
-  add(body,new THREE.TorusGeometry(robe?.268:ghost?.238:.207,.017,8,40),trim,0,robe?.01:ghost?.05:.31,0).rotation.x=Math.PI/2;
-  add(body,new THREE.TorusGeometry(.158,.022,8,36),leather,0,.48,0).rotation.x=Math.PI/2;
-  add(body,new THREE.BoxGeometry(.055,.048,.02),gold,0,.48,.172);
-  add(body,new THREE.TorusGeometry(.075,.022,8,24),trim,0,.765,0).rotation.x=Math.PI/2;
-  // Arme med ærmekant og hænder
-  const long=id==='trold'?1.2:1;
-  const armL=pivot(-.2,.7,0), armR=pivot(.2,.7,0);
-  [armL,armR].forEach(a=>{add(a,new THREE.SphereGeometry(.066,16,12),tunic); add(a,new THREE.CylinderGeometry(.052,.045,.22*long,14),tunic,0,-.12*long,0);
-    add(a,new THREE.TorusGeometry(.047,.013,8,20),trim,0,-.23*long,0).rotation.x=Math.PI/2; add(a,new THREE.SphereGeometry(.053,14,10),skin,0,-.29*long,0)});
-  add(body,new THREE.CylinderGeometry(.052,.058,.07,12),skin,0,.79,0);
-  // Hoved og ansigt
-  let head;
-  if(id==='golem'){head=add(body,new THREE.DodecahedronGeometry(.17,0),skin,0,H,0); head.scale.set(1.05,.95,1)}
-  else {head=add(body,new THREE.SphereGeometry(.165,28,20),skin,0,H,0); head.scale.y=.96}
-  const face=(o={})=>{
-    const ey=o.y||.955, ex=o.x||.058, iris=o.iris||'#1a1410';
-    [-1,1].forEach(s=>{
-      add(body,new THREE.SphereGeometry(.034,16,12),white,s*ex,ey,.142).scale.z=.55;
-      add(body,new THREE.SphereGeometry(.02,12,10),mk(iris,{roughness:.3}),s*ex,ey-.002,.157);
-      add(body,new THREE.SphereGeometry(.007,8,6),basic('#ffffff'),s*ex-.006,ey+.008,.166);
-      if(!o.noBrow){const b=add(body,new THREE.BoxGeometry(.056,.013,.014),o.brow||hair,s*ex,ey+.048,.148); b.rotation.z=s*(o.angry?-.35:.15)}
-      if(!o.noCheek) add(body,new THREE.SphereGeometry(.028,10,8),mk('#e88a8a',{roughness:.9}),s*.098,.905,.122).material.opacity=.35;
-    });
-    if(!o.noNose) add(body,new THREE.SphereGeometry(o.nose||.022,12,10),skin,0,.925,.163);
-    if(!o.noMouth){const m=add(body,new THREE.TorusGeometry(.026,.006,6,16,Math.PI),mk('#7a2a22'),0,.892,.152); m.rotation.z=Math.PI}
-  };
-  const capHair=(c=hair,rx=-.3)=>{const h=add(body,new THREE.SphereGeometry(.174,28,16,0,Math.PI*2,0,Math.PI*.55),c,0,H+.005,-.01); h.rotation.x=rx; return h};
-  let hat=null;
-  switch(id){
-    case 'dvaerg': {capHair(); face({brow:hair});
-      const beard=add(body,lathe([[0,.0],[.05,.02],[.1,.08],[.13,.16],[.12,.22],[0,.24]]),hair,0,.66,.1); beard.scale.z=.6;
-      [-1,1].forEach(s=>{const m=add(body,new THREE.CylinderGeometry(.02,.012,.09,10),hair,s*.04,.9,.16); m.rotation.z=s*1.2});
-      [.7,.74].forEach(y=>add(body,new THREE.TorusGeometry(.03,.008,6,12),gold,0,y,.17));
-      break}
-    case 'elver': {capHair(hair,-.15); face({iris:'#3f7d4a'});
-      [-1,1].forEach(s=>{const e=add(body,new THREE.SphereGeometry(.03,12,10),skin,s*.17,.97,-.01); e.scale.set(.8,3.2,1.4); e.rotation.z=-s*.9});
-      add(body,lathe([[0,.0],[.14,.02],[.16,.12],[.15,.3],[0,.32]]),hair,0,.66,-.07).scale.z=.7;
-      add(body,new THREE.TorusGeometry(.17,.008,6,40),gold,0,1.01,0).rotation.x=Math.PI/2.2; break}
-    case 'ork': {face({iris:'#c0392b',angry:true,brow:mk('#3f5a2a'),noCheek:true,noMouth:true,nose:.03});
-      add(body,new THREE.SphereGeometry(.1,16,12),skin,0,.87,.09).scale.set(1.3,.7,1);
-      [-1,1].forEach(s=>taper(body,[[s*.05,.86,.16],[s*.055,.92,.18],[s*.045,.96,.17]],.018,.004,bone));
-      [-1,1].forEach(s=>{const e=add(body,new THREE.SphereGeometry(.035,10,8),skin,s*.165,.95,0); e.scale.set(.6,1,1.8); e.rotation.y=s*.6});
-      const knot=add(body,new THREE.SphereGeometry(.045,12,10),hair,0,1.1,-.03); add(body,new THREE.TorusGeometry(.03,.01,6,12),gold,0,1.07,-.03).rotation.x=Math.PI/2; break}
-    case 'nisse': {face({brow:mk('#f4f0e6')});
-      add(body,lathe([[0,.0],[.06,.02],[.11,.07],[.13,.13],[.12,.19],[0,.21]]),hair,0,.69,.1).scale.z=.65;
-      const hm=mk('#b8322a'); hat=new THREE.Group(); body.add(hat);
-      add(hat,new THREE.TorusGeometry(.165,.028,10,32),white,0,1.03,0).rotation.x=Math.PI/2;
-      taper(hat,[[0,1.04,0],[0,1.18,-.01],[0,1.3,-.05],[0,1.38,-.13],[0,1.39,-.2]],.165,.03,hm);
-      add(hat,new THREE.SphereGeometry(.04,12,10),white,0,1.39,-.22); break}
-    case 'trold': {face({noCheek:true,nose:.05,iris:'#5a4a2a'}); head.scale.set(1.1,.92,1);
-      [[0,1.08,0],[-.06,1.06,.04],[.07,1.07,-.02]].forEach(([x,y,z])=>add(body,new THREE.SphereGeometry(.05,10,8),hair,x,y,z));
-      [-1,1].forEach(s=>add(body,new THREE.SphereGeometry(.04,10,8),skin,s*.17,.93,0).scale.set(.6,1,1.2));
-      torso.rotation.x=.1; break}
-    case 'troldmand': {face({brow:mk('#ecebe6')});
-      add(body,lathe([[0,.0],[.04,.02],[.09,.1],[.11,.2],[.1,.28],[0,.3]]),hair,0,.6,.1).scale.z=.65;
-      [-1,1].forEach(s=>{const m=add(body,new THREE.CylinderGeometry(.016,.01,.09,8),hair,s*.045,.9,.16); m.rotation.z=s*1.25});
-      const hm=mk('#2c4f86'); hat=new THREE.Group(); body.add(hat);
-      add(hat,lathe([[0,.0],[.3,.0],[.29,.012],[.16,.02],[0,.025]],36),hm,0,1.03,0);
-      taper(hat,[[0,1.04,0],[0,1.25,-.02],[0,1.42,-.08],[.05,1.52,-.18]],.165,.02,hm);
-      add(hat,new THREE.TorusGeometry(.164,.018,8,32),gold,0,1.06,0).rotation.x=Math.PI/2; break}
-    case 'skelet': {face({noBrow:true,noCheek:true,noNose:true,noMouth:true,iris:'#1a1410'});
-      [-1,1].forEach(s=>add(body,new THREE.SphereGeometry(.042,14,10),dark,s*.058,.95,.13).scale.z=.5);
-      add(body,new THREE.ConeGeometry(.018,.03,3),dark,0,.912,.158).rotation.x=Math.PI;
-      for(let i=-2;i<=2;i++) add(body,new THREE.BoxGeometry(.016,.022,.012),bone,i*.019,.865,.146);
-      [0,1,2].forEach(i=>add(body,new THREE.TorusGeometry(.172-i*.006,.01,6,32),bone,0,.62-i*.05,0).rotation.x=Math.PI/2); break}
-    case 'minotaur': {face({noNose:true,noMouth:true,noCheek:true,angry:true,brow:dark,y:.98});
-      const sn=add(body,new THREE.SphereGeometry(.085,16,12),mk('#8a6a4a'),0,.89,.13); sn.scale.set(1.25,.8,.9);
-      [-1,1].forEach(s=>{add(body,new THREE.SphereGeometry(.013,8,6),dark,s*.035,.885,.205);
-        taper(body,[[s*.15,1.0,0],[s*.26,1.05,.02],[s*.3,1.14,.05],[s*.27,1.22,.07]],.04,.006,bone);
-        const e=add(body,new THREE.SphereGeometry(.04,10,8),skin,s*.18,.93,-.03); e.scale.set(1.6,.6,1)});
-      add(body,new THREE.TorusGeometry(.032,.007,8,20),gold,0,.85,.2); break}
-    case 'fe': {face({iris:'#7a3fa0'});
-      capHair(); add(body,new THREE.SphereGeometry(.07,14,12),hair,0,1.1,-.08);
-      const wm=new THREE.MeshStandardMaterial({color:col('#cdeeff'),transparent:true,opacity:.6,side:THREE.DoubleSide,depthWrite:false,emissive:col('#4a6f99'),roughness:.2,metalness:.1});
-      const wing=(big)=>{const sh=new THREE.Shape(); const w=big?.32:.24, h=big?.22:.16; sh.moveTo(0,0); sh.bezierCurveTo(w*.3,h*1.1,w,h*1.2,w,h*.4); sh.bezierCurveTo(w,0,w*.5,-h*.2,0,0); return new THREE.ShapeGeometry(sh,12)};
-      const wings=[]; [[1,.72,true],[1,.6,false]].forEach(([_,y,big])=>[-1,1].forEach(s=>{const g=new THREE.Group(); g.position.set(s*.05,y,-.16); body.add(g);
-        const w=add(g,wing(big),wm); w.scale.x=s; w.rotation.x=big?.15:-.5; g.userData.s=s; wings.push(g)}));
-      an.push(t=>wings.forEach(g=>{g.rotation.y=g.userData.s*(.35+Math.sin(t*14)*.4)})); break}
-    case 'drage': {face({iris:'#e8c35a',angry:true,brow:mk('#2f6b5a'),noCheek:true,noMouth:true,noNose:true});
-      const sn=add(body,new THREE.SphereGeometry(.08,16,12),skin,0,.89,.12); sn.scale.set(1,.7,1.5);
-      [-1,1].forEach(s=>{add(body,new THREE.SphereGeometry(.01,6,4),dark,s*.03,.9,.24); taper(body,[[s*.09,1.04,-.04],[s*.12,1.08,-.14],[s*.13,1.08,-.24]],.028,.004,bone)});
-      [0,1,2,3].forEach(i=>add(body,new THREE.ConeGeometry(.025,.07,4),mk('#2f6b5a'),0,1.08-i*.07,-.12-i*.04).rotation.x=-.6-i*.2);
-      const tg=new THREE.Group(); tg.position.set(0,.36,-.16); body.add(tg); taper(tg,[[0,0,0],[0,-.08,-.14],[0,-.18,-.26],[.04,-.26,-.38],[.1,-.3,-.46]],.075,.01,skin);
-      an.push(t=>{tg.rotation.y=Math.sin(t*1.8)*.3}); break}
-    case 'kat': {face({iris:'#3f9b4a',noNose:true,noMouth:true,noCheek:true,brow:mk('#a8622a')});
-      const mz=add(body,new THREE.SphereGeometry(.055,14,10),mk('#f4e6d0'),0,.895,.135); mz.scale.set(1.3,.8,.8);
-      add(body,new THREE.SphereGeometry(.016,8,6),mk('#e58a9a'),0,.915,.18);
-      [-1,1].forEach(s=>{add(body,new THREE.ConeGeometry(.06,.12,4),skin,s*.095,1.08,-.01).rotation.z=-s*.2; add(body,new THREE.ConeGeometry(.035,.07,4),mk('#e8a0a8'),s*.093,1.07,.012).rotation.z=-s*.2;
-        [-.012,.012].forEach(dy=>{const w=add(body,new THREE.BoxGeometry(.11,.004,.004),white,s*.09,.89+dy,.17); w.rotation.z=s*dy*8})});
-      const tg=new THREE.Group(); tg.position.set(0,.36,-.15); body.add(tg); taper(tg,[[0,0,0],[0,.02,-.12],[0,.14,-.2],[0,.28,-.18],[0,.34,-.1]],.03,.022,skin);
-      an.push(t=>{tg.rotation.z=Math.sin(t*2.6)*.35}); break}
-    case 'faun': {capHair(); face({iris:'#7a4a22'});
-      [-1,1].forEach(s=>taper(body,[[s*.08,1.04,-.02],[s*.13,1.12,-.06],[s*.16,1.1,-.14],[s*.13,1.04,-.15]],.03,.008,mk('#cbbd9c')));
-      [-1,1].forEach(s=>{const e=add(body,new THREE.SphereGeometry(.03,10,8),skin,s*.17,.95,0); e.scale.set(.6,1.8,1); e.rotation.z=-s*1.2}); break}
-    case 'spoegelse': {[-1,1].forEach(s=>add(body,new THREE.SphereGeometry(.035,14,10),dark,s*.055,.96,.14).scale.set(.8,1.3,.4));
-      add(body,new THREE.TorusGeometry(.022,.008,8,16),dark,0,.88,.155); head.scale.set(1,1.08,1); break}
-    case 'golem': {[-1,1].forEach(s=>{add(body,new THREE.BoxGeometry(.05,.025,.02),basic('#7fe7ff'),s*.06,.95,.155); add(body,new THREE.DodecahedronGeometry(.1,0),skin,s*.22,.74,0)});
-      [[.08,1.06,.06],[-.1,1.02,.09],[.17,.76,.04]].forEach(([x,y,z])=>add(body,new THREE.SphereGeometry(.035,8,6),mk('#5f8f4a'),x,y,z).scale.y=.4);
-      add(body,new THREE.BoxGeometry(.1,.015,.02),dark,0,.89,.16); break}
-    case 'varulv': {face({iris:'#e8c35a',angry:true,brow:mk('#4a4848'),noCheek:true,noMouth:true,noNose:true});
-      const sn=add(body,new THREE.ConeGeometry(.075,.18,16),skin,0,.89,.2); sn.rotation.x=Math.PI/2; add(body,new THREE.SphereGeometry(.022,8,6),dark,0,.895,.29);
-      add(body,new THREE.ConeGeometry(.2,.12,16),skin,0,.78,0);
-      [-1,1].forEach(s=>add(body,new THREE.ConeGeometry(.055,.13,4),skin,s*.095,1.08,-.02).rotation.z=-s*.25);
-      const tg=new THREE.Group(); tg.position.set(0,.38,-.15); body.add(tg); taper(tg,[[0,0,0],[0,-.06,-.13],[0,-.08,-.26],[0,-.04,-.36]],.05,.03,skin);
-      an.push(t=>{tg.rotation.y=Math.sin(t*2.4)*.35}); break}
-    case 'kyklop': {head.scale.set(1.08,1.02,1);
-      add(body,new THREE.SphereGeometry(.058,18,14),white,0,.96,.13).scale.z=.6; add(body,new THREE.SphereGeometry(.032,14,10),mk('#3f7d4a'),0,.958,.158); add(body,new THREE.SphereGeometry(.016,10,8),dark,0,.958,.172);
-      add(body,new THREE.SphereGeometry(.009,6,4),basic('#ffffff'),-.012,.97,.178);
-      add(body,new THREE.BoxGeometry(.13,.016,.014),dark,0,1.03,.15).rotation.z=.05;
-      add(body,new THREE.TorusGeometry(.03,.007,6,16,Math.PI),mk('#7a2a22'),0,.885,.155).rotation.z=Math.PI;
-      taper(body,[[0,1.08,.03],[0,1.15,.05],[0,1.2,.04]],.03,.006,bone); break}
-  }
-  // Brystskjold med romertal og våbenmærke
-  const chestM=new THREE.MeshStandardMaterial({map:pieceTexture(p),roughness:.45,transparent:true,side:THREE.DoubleSide});
-  const chest=add(body,new THREE.ShapeGeometry(shieldShape()),chestM,0,.5,.19); chest.scale.setScalar(.22); chest.rotation.x=-.06;
-  body.scale.set(K.sc[0],K.sc[1],K.sc[0]);
-  const mats=[]; root.traverse(o=>{if(o.isMesh&&o.material&&o.material.transparent&&!mats.includes(o.material)) mats.push(o.material)});
-  return {root,body,legL,legR,armL,armR,torso,head,hat,an,mats,kind:K};
-}
 // Tegnede figurer: AI-tegninger som pap-figurer på baser, én for hver af de 16 arter.
 // Tegningerne ligger i siden som WebP-billeder (640 px høje).
 const SPRITES={
@@ -2636,135 +2473,6 @@ function shieldGeometry(){
   const sh=shieldShape();
   const g=new THREE.ExtrudeGeometry(sh,{depth:.09,bevelEnabled:true,bevelThickness:.02,bevelSize:.02,bevelSegments:2,curveSegments:10});
   g.translate(0,0,-.045); return g;
-}
-
-/* ---------- Evnernes udseende i 3D ----------
-   Hver evne har et stykke udstyr på 3D-figuren (de tegnede figurer bruger evnemærker, se BADGES). Udstyret sidder på en fast plads (hoved, ryg, hænder osv.).
-   Har en brik to evner, der vil sidde samme sted, svæver den ene i stedet som et lille mærke rundt om figuren,
-   så alle evner altid kan ses. Niveaudelte evner bliver lidt større for hvert niveau. */
-const LOOK={
-  sej:{slot:'head',txt:'ridderhjelm med fjerbusk'}, selvantaendelig:{slot:'head',txt:'bombe med tændt lunte på hovedet'},
-  kampivrig:{slot:'head',txt:'vikingehorn'}, hovmodig:{slot:'head',txt:'guldkrone'}, snigmorder:{slot:'head',txt:'sort hætte'},
-  kommandosoldat:{slot:'head',txt:'grøn soldaterhjelm'},
-  regeneration:{slot:'halo',txt:'glorie af grønne blade'}, forbandet:{slot:'halo',txt:'lilla forbandelsessky'},
-  uheldig:{slot:'halo',txt:'lille regnsky over hovedet'}, stjernehopper:{slot:'halo',txt:'gylden stjerne over hovedet'},
-  hurtig:{slot:'back',txt:'rød kappe'}, langsom:{slot:'back',txt:'sneglehus på ryggen'},
-  booster:{slot:'pack',txt:'raketrygsæk med flammer'},
-  draeber:{slot:'right',txt:'sværd'}, bersaerk:{slot:'right',txt:'stridsøkse'},
-  heldig:{slot:'left',txt:'firkløver'}, atlet:{slot:'left',txt:'håndvægt'}, stifinder:{slot:'left',txt:'kortrulle'}, kryster:{slot:'left',txt:'hvidt overgivelsesflag'},
-  bredskuldret:{slot:'shoulders',txt:'store guldskulderplader'},
-  aerkefjende:{slot:'face',txt:'vrede røde øjne'}, haevner:{slot:'face2',txt:'klap for øjet'}, vatarm:{slot:'face3',txt:'plaster på kinden'},
-  neurotiker:{slot:'sweat',txt:'svedperler på panden'},
-  hjemve:{slot:'base',txt:'lille hus ved foden'}, hojdespringer:{slot:'spring',txt:'fjeder under foden'}, turbo:{slot:'trail',txt:'flammer bag foden'},
-  aura:{slot:'aura',txt:'gylden lysende kugle'}, usynlighed:{slot:'veil',txt:'gennemsigtigt blåt slør'},
-  malsogende:{slot:'orbit',txt:'svævende skydeskive'}, hypnotisor:{slot:'orbit',txt:'svævende hypnosespiral'}, ingenstedsans:{slot:'orbit',txt:'svævende spørgsmålstegn'},
-  globetrotter:{slot:'orbit',txt:'svævende lille globus'}, bakgear:{slot:'orbit',txt:'svævende pil der peger bagud'}, pacifist:{slot:'orbit',txt:'hvid fredsdue'},
-};
-const GEAR={};
-(()=>{
-  let C=null;
-  const mats=()=>C||(C={
-    metal:M3('#a3aab3',{metalness:.65,roughness:.35}), gold:M3('#e8c35a',{metalness:.7,roughness:.3}), red:M3('#b8322a'), green:M3('#3f9b4a'),
-    dark:M3('#26201b'), white:M3('#f4f0e6'), brown:M3('#7a5230'), purple:M3('#6b3fa0',{emissive:col('#2a0f45')}), blue:M3('#4a7fc0'),
-    grey:M3('#8e8a85'), army:M3('#55683a'), parch:M3('#e9dcb8'), glowR:new THREE.MeshBasicMaterial({color:col('#ff3b2a')}),
-    flame:new THREE.MeshBasicMaterial({color:col('#ff9a2a'),transparent:true,opacity:.9}), flame2:new THREE.MeshBasicMaterial({color:col('#ffe27a'),transparent:true,opacity:.9}),
-    drop:M3('#7fc4ff',{metalness:.1,roughness:.1,transparent:true,opacity:.85})});
-  const mesh=(geo,m,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.castShadow=true; return o};
-  const grp=(...a)=>{const g=new THREE.Group(); a.forEach(o=>g.add(o)); return g};
-  const spr=(draw)=>{const c=cvs(128,128), x=c.getContext('2d'); draw(x); const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex3(c),transparent:true,depthWrite:false})); s.scale.setScalar(.34); return s};
-  const badgeSpr=(glyph,bg)=>spr(x=>{x.fillStyle=bg; x.beginPath(); x.arc(64,64,56,0,Math.PI*2); x.fill(); x.lineWidth=8; x.strokeStyle='#3b2a1a'; x.stroke();
-    x.fillStyle='#3b2a1a'; x.font='800 64px Cinzel, Georgia, serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(glyph,64,70)});
-  const Y=1.08; // skjoldets top
-  Object.assign(GEAR,{
-    sej:()=>{const m=mats(); return grp(mesh(new THREE.SphereGeometry(.25,18,12,0,Math.PI*2,0,Math.PI/2),m.metal,0,Y-.06,0), mesh(new THREE.BoxGeometry(.3,.04,.04),m.dark,0,Y+.05,.22), mesh(new THREE.ConeGeometry(.07,.32,10),m.red,0,Y+.33,-.04))},
-    selvantaendelig:(an)=>{const m=mats(), spark=mesh(new THREE.SphereGeometry(.055,10,8),m.flame2,.12,Y+.42,0); an.push(t=>spark.scale.setScalar(.7+Math.abs(Math.sin(t*14))*.8));
-      return grp(mesh(new THREE.SphereGeometry(.19,16,12),m.dark,0,Y+.12,0), mesh(new THREE.CylinderGeometry(.015,.015,.2,6),m.brown,.07,Y+.32,0), spark)},
-    kampivrig:()=>{const m=mats(), g=new THREE.Group(); [-1,1].forEach(s=>{const h=mesh(new THREE.ConeGeometry(.06,.34,10),m.white,s*.24,Y+.08,0); h.rotation.z=-s*.9; g.add(h)});
-      g.add(mesh(new THREE.SphereGeometry(.22,16,10,0,Math.PI*2,0,Math.PI/2),m.brown,0,Y-.06,0)); return g},
-    hovmodig:()=>{const m=mats(), g=grp(mesh(new THREE.CylinderGeometry(.2,.2,.1,20,1,true),m.gold,0,Y+.03,0)); g.children[0].material=m.gold.clone(); g.children[0].material.side=THREE.DoubleSide;
-      for(let i=0;i<5;i++){const a=i/5*Math.PI*2; g.add(mesh(new THREE.ConeGeometry(.04,.12,6),m.gold,Math.sin(a)*.2,Y+.13,Math.cos(a)*.2))} g.add(mesh(new THREE.SphereGeometry(.035,8,6),m.glowR,0,Y+.04,.2)); return g},
-    snigmorder:()=>{const m=mats(); return grp(mesh(new THREE.ConeGeometry(.3,.5,16),m.dark,0,Y+.12,-.02))},
-    kommandosoldat:()=>{const m=mats(); return grp(mesh(new THREE.SphereGeometry(.26,18,12,0,Math.PI*2,0,Math.PI/2),m.army,0,Y-.05,0), mesh(new THREE.CylinderGeometry(.31,.31,.025,20),m.army,0,Y-.05,0))},
-    regeneration:(an)=>{const m=mats(), g=grp(mesh(new THREE.TorusGeometry(.2,.02,8,30),m.green));
-      for(let i=0;i<6;i++){const a=i/6*Math.PI*2, l=mesh(new THREE.SphereGeometry(.06,8,6),m.green,Math.cos(a)*.2,0,Math.sin(a)*.2); l.scale.set(1,.4,1.8); l.rotation.y=-a; g.add(l)}
-      g.children[0].rotation.x=Math.PI/2; g.position.y=Y+.3; an.push(t=>{g.rotation.y=t*.8}); return g},
-    forbandet:(an)=>{const m=mats(), g=grp(mesh(new THREE.SphereGeometry(.13,10,8),m.purple,-.12,0,0),mesh(new THREE.SphereGeometry(.16,10,8),m.purple,.04,.04,0),mesh(new THREE.SphereGeometry(.12,10,8),m.purple,.18,0,0));
-      g.position.y=Y+.32; an.push(t=>{g.position.y=Y+.32+Math.sin(t*2)*.04}); return g},
-    uheldig:(an)=>{const m=mats(), g=grp(mesh(new THREE.SphereGeometry(.12,10,8),m.grey,-.12,0,0),mesh(new THREE.SphereGeometry(.15,10,8),m.grey,.03,.04,0),mesh(new THREE.SphereGeometry(.11,10,8),m.grey,.17,0,0));
-      const rain=[-.1,0,.1].map((x,i)=>{const d=mesh(new THREE.CylinderGeometry(.008,.008,.12,4),m.drop,x,-.18,0); g.add(d); return d});
-      an.push(t=>rain.forEach((d,i)=>{d.position.y=-.15-((t*1.2+i*.33)%1)*.3})); g.position.y=Y+.4; return g},
-    stjernehopper:(an)=>{const m=mats(), sh=new THREE.Shape(); for(let i=0;i<10;i++){const r=i%2?.07:.17, a=i/10*Math.PI*2+Math.PI/2; i?sh.lineTo(Math.cos(a)*r,Math.sin(a)*r):sh.moveTo(Math.cos(a)*r,Math.sin(a)*r)}
-      const s=mesh(new THREE.ExtrudeGeometry(sh,{depth:.04,bevelEnabled:false}),m.gold,0,Y+.32,0); an.push(t=>{s.rotation.y=t*2}); return grp(s)},
-    hurtig:(an)=>{const m=mats(), c=mesh(new THREE.PlaneGeometry(.72,.95,4,6),new THREE.MeshStandardMaterial({color:col('#b8322a'),side:THREE.DoubleSide,roughness:.8}),0,.5,-.1);
-      const base=c.geometry.attributes.position.array.slice(); an.push(t=>{const p=c.geometry.attributes.position; for(let i=0;i<p.count;i++){const y0=base[i*3+1], k=(.475-y0); p.setZ(i,base[i*3+2]-k*.25-Math.sin(t*6+y0*6)*.04*k)} p.needsUpdate=true});
-      c.rotation.x=.12; return grp(c)},
-    langsom:()=>{const m=mats(), g=grp(mesh(new THREE.SphereGeometry(.22,16,12),m.brown,0,.42,-.2), mesh(new THREE.TorusGeometry(.13,.035,8,20),new THREE.MeshStandardMaterial({color:col('#c9a46a')}),0,.44,-.38)); return g},
-    booster:(an)=>{const m=mats(), g=new THREE.Group(); [-.12,.12].forEach(x=>{g.add(mesh(new THREE.CylinderGeometry(.07,.07,.4,12),m.metal,x,.62,-.17));
-        const f=mesh(new THREE.ConeGeometry(.06,.22,10),m.flame,x,.31,-.17); f.rotation.x=Math.PI; g.add(f); an.push(t=>f.scale.set(1,.7+Math.random()*.6,1))}); return g},
-    draeber:()=>{const m=mats(), g=grp(mesh(new THREE.BoxGeometry(.05,.62,.02),m.metal,0,.36,0), mesh(new THREE.BoxGeometry(.2,.04,.05),m.gold,0,.05,0), mesh(new THREE.CylinderGeometry(.025,.025,.14,8),m.brown,0,-.04,0));
-      g.position.set(.46,.42,.05); g.rotation.z=-.25; return g},
-    bersaerk:()=>{const m=mats(), g=grp(mesh(new THREE.CylinderGeometry(.025,.025,.7,8),m.brown,0,.3,0), mesh(new THREE.CylinderGeometry(.17,.17,.03,16,1,false,0,Math.PI),m.metal,0,.55,0));
-      g.children[1].rotation.x=Math.PI/2; g.children[1].rotation.z=Math.PI/2; g.position.set(.46,.3,.05); g.rotation.z=-.2; return g},
-    heldig:()=>{const m=mats(), g=grp(mesh(new THREE.CylinderGeometry(.012,.012,.3,6),m.green,0,0,0)); [[0,.06],[0,-.06],[.06,0],[-.06,0]].forEach(([x,z])=>{const l=mesh(new THREE.SphereGeometry(.06,10,8),m.green,x,.17,z+.02); l.scale.set(1,1,.35); g.add(l)});
-      g.position.set(-.46,.55,.06); return g},
-    atlet:()=>{const m=mats(), g=grp(mesh(new THREE.CylinderGeometry(.018,.018,.34,8),m.metal,0,0,0)); [-.15,.15].forEach(y=>g.add(mesh(new THREE.CylinderGeometry(.07,.07,.05,14),m.dark,0,y,0)));
-      g.rotation.z=Math.PI/2; g.position.set(-.48,.5,.06); return g},
-    stifinder:()=>{const m=mats(), g=grp(mesh(new THREE.CylinderGeometry(.05,.05,.32,12),m.parch,0,0,0), mesh(new THREE.TorusGeometry(.052,.012,6,14),m.red,0,0,0));
-      g.children[1].rotation.x=Math.PI/2; g.position.set(-.46,.5,.06); g.rotation.z=.5; return g},
-    kryster:(an)=>{const m=mats(), fl=mesh(new THREE.PlaneGeometry(.26,.17),new THREE.MeshStandardMaterial({color:col('#ffffff'),side:THREE.DoubleSide}),.13,.25,0);
-      an.push(t=>{fl.rotation.y=Math.sin(t*4)*.3}); const g=grp(mesh(new THREE.CylinderGeometry(.012,.012,.6,6),m.brown,0,0,0),fl); g.position.set(-.46,.62,.03); return g},
-    bredskuldret:()=>{const m=mats(), g=new THREE.Group(); [-1,1].forEach(s=>{const p=mesh(new THREE.SphereGeometry(.17,16,10,0,Math.PI*2,0,Math.PI/2),m.gold,s*.36,.9,0); p.rotation.z=-s*.5; g.add(p)}); return g},
-    aerkefjende:(an)=>{const m=mats(), g=new THREE.Group(); [-1,1].forEach(s=>{g.add(mesh(new THREE.SphereGeometry(.035,8,6),m.glowR,s*.1,.72,.08)); const b=mesh(new THREE.BoxGeometry(.13,.025,.02),m.dark,s*.1,.8,.08); b.rotation.z=s*.4; g.add(b)});
-      an.push(t=>g.children.forEach((c,i)=>{if(i%2===0) c.scale.setScalar(.8+Math.abs(Math.sin(t*3))*.4)})); return g},
-    haevner:()=>{const m=mats(); const strap=mesh(new THREE.BoxGeometry(.7,.025,.02),m.dark,0,.76,.075); strap.rotation.z=.25; return grp(mesh(new THREE.CylinderGeometry(.07,.07,.02,14),m.dark,-.1,.73,.085), strap)},
-    vatarm:()=>{const m=mats(), a=mesh(new THREE.BoxGeometry(.24,.06,.015),m.white,0,.38,.08), b=a.clone(); a.rotation.z=.6; b.rotation.z=-.6; return grp(a,b)},
-    neurotiker:(an)=>{const m=mats(), g=new THREE.Group(); [[-.3,.95],[.32,.88],[-.25,.7]].forEach(([x,y],i)=>{const d=mesh(new THREE.SphereGeometry(.035,8,6),m.drop,x,y,.06); d.scale.set(1,1.5,1); g.add(d); an.push(t=>{d.position.y=y-((t*.7+i*.3)%1)*.25})}); return g},
-    hjemve:()=>{const m=mats(); return grp(mesh(new THREE.BoxGeometry(.18,.14,.16),m.parch,.38,.07,.12), mesh(new THREE.ConeGeometry(.15,.13,4),m.red,.38,.2,.12))},
-    hojdespringer:(an)=>{const m=mats(), g=new THREE.Group(); for(let i=0;i<3;i++) g.add(mesh(new THREE.TorusGeometry(.26,.018,6,24),m.gold,0,.015+i*.035,0)); g.children.forEach(c=>c.rotation.x=Math.PI/2);
-      an.push(t=>{g.scale.y=1+Math.sin(t*5)*.25}); return g},
-    turbo:(an)=>{const m=mats(), g=new THREE.Group(); [-.12,0,.12].forEach((x,i)=>{const f=mesh(new THREE.ConeGeometry(.06,.3,8),i===1?m.flame2:m.flame,x,.08,-.42); f.rotation.x=-Math.PI/2; g.add(f); an.push(t=>f.scale.set(1,.6+Math.random()*.7,1))}); return g},
-    aura:(an)=>{const s=new THREE.Mesh(new THREE.SphereGeometry(.6,24,16),new THREE.MeshBasicMaterial({color:col('#ffd76a'),transparent:true,opacity:.16,depthWrite:false})); s.position.y=.55;
-      an.push(t=>{s.material.opacity=.12+Math.sin(t*2.5)*.06}); return grp(s)},
-    usynlighed:(an)=>{const v=new THREE.Mesh(new THREE.CylinderGeometry(.48,.52,1.15,24,1,true),new THREE.MeshBasicMaterial({color:col('#9fd3ff'),transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false})); v.position.y=.58;
-      an.push(t=>{v.material.opacity=.1+Math.abs(Math.sin(t*1.7))*.15; v.rotation.y=t}); return grp(v)},
-    malsogende:()=>spr(x=>{[[56,'#f4f0e6'],[44,'#b8322a'],[30,'#f4f0e6'],[16,'#b8322a']].forEach(([r,c])=>{x.fillStyle=c; x.beginPath(); x.arc(64,64,r,0,Math.PI*2); x.fill()}); x.lineWidth=6; x.strokeStyle='#3b2a1a'; x.beginPath(); x.arc(64,64,56,0,Math.PI*2); x.stroke()}),
-    hypnotisor:(an)=>{const s=spr(x=>{x.fillStyle='#f4f0e6'; x.beginPath(); x.arc(64,64,56,0,Math.PI*2); x.fill(); x.strokeStyle='#6b3fa0'; x.lineWidth=7; x.beginPath(); for(let a=0;a<Math.PI*8;a+=.1){const r=a*2; x.lineTo(64+Math.cos(a)*r,64+Math.sin(a)*r)} x.stroke(); x.lineWidth=5; x.strokeStyle='#3b2a1a'; x.beginPath(); x.arc(64,64,56,0,Math.PI*2); x.stroke()});
-      an.push(t=>{s.material.rotation=t*3}); return s},
-    ingenstedsans:()=>badgeSpr('?','#9fd3ff'),
-    globetrotter:()=>{const m=mats(); return grp(mesh(new THREE.SphereGeometry(.12,16,12),m.blue), mesh(new THREE.SphereGeometry(.122,10,8,0,1.6,.6,1),m.green))},
-    bakgear:()=>badgeSpr('◀','#e9dcb8'),
-    pacifist:(an)=>{const m=mats(), body=mesh(new THREE.SphereGeometry(.07,10,8),m.white); body.scale.set(1.5,1,1);
-      const w=[-1,1].map(s=>{const k=mesh(new THREE.BoxGeometry(.16,.01,.08),m.white,s*.08,.02,0); return k}); an.push(t=>w.forEach((k,i)=>k.rotation.z=(i?1:-1)*Math.sin(t*10)*.6));
-      return grp(body,...w,mesh(new THREE.ConeGeometry(.02,.05,6),m.gold,.11,0,0))},
-  });
-  GEAR.overflow=(id)=>badgeSpr(ABIL[id].name.slice(0,2),ABIL[id].t==='s'?'#e8c35a':ABIL[id].t==='n'?'#c9bfae':'#efe3c4');
-})();
-// Sæt udstyr på en figur. Returnerer animationer (funktioner af tiden).
-// Hvor hver plads sidder på menneskefiguren (udstyret er tegnet til et skjold og skaleres hertil).
-const GEAR_TF={head:{s:.74,p:[0,.205,0]},halo:{s:.8,p:[0,.2,0]},back:{s:.65,p:[0,.155,-.13]},pack:{s:.65,p:[0,.155,-.13]},shoulders:{s:.65,p:[0,.14,0]},
-  face:{s:.55,p:[0,.55,.115]},face2:{s:.55,p:[0,.55,.115]},face3:{s:.45,p:[.09,.74,.114]},sweat:{s:.55,p:[0,.55,.11]}};
-function dressPiece(p,holder,rig){
-  const an=[], used=new Set(), orbit=[];
-  const ids=ORDER.filter(id=>p.abil[id]).sort((a,b)=>p.abil[b]-p.abil[a]);
-  for(const id of ids){
-    const L=LOOK[id]; if(!L) continue;
-    const lvl=p.abil[id], scale=1+.12*(lvl-1);
-    if(L.slot==='orbit'||used.has(L.slot)){orbit.push(L.slot==='orbit'?GEAR[id](an):GEAR.overflow(id)); continue}
-    used.add(L.slot);
-    const o=GEAR[id](an);
-    if(rig&&(L.slot==='right'||L.slot==='left')){o.position.set(0,-.32,.05); o.scale.multiplyScalar(.7*scale); (L.slot==='right'?rig.armR:rig.armL).add(o); continue}
-    const tf=rig&&GEAR_TF[L.slot];
-    if(L.slot==='head'&&rig&&rig.hat) rig.hat.visible=false;
-    if(tf){const w=new THREE.Group(); w.position.set(...tf.p); if(rig.headDy&&['head','halo','face','face2','face3','sweat'].includes(L.slot)) w.position.y+=rig.headDy; w.scale.setScalar(tf.s*scale); w.add(o); holder.add(w)}
-    else {o.scale.multiplyScalar(scale); holder.add(o)}
-  }
-  if(orbit.length){
-    const ring=new THREE.Group(); ring.position.y=.75; holder.add(ring);
-    orbit.forEach((o,i)=>{const a=i/orbit.length*Math.PI*2; o.position.set(Math.cos(a)*.58,Math.sin(i*1.7)*.12,Math.sin(a)*.58); ring.add(o)});
-    an.push(t=>{ring.rotation.y=t*.9});
-  }
-  holder.traverse(m=>{if(m.isMesh) m.castShadow=true});
-  return an;
 }
 
 V3D.init=function(){
@@ -3055,7 +2763,7 @@ V3D.buildTrack=function(){
 V3D.setTeams=function(){
   if(V3D.trackKind!==B.kind){V3D.buildTrack(); V3D.teamKey=''}
   const newGameKey=B.kind+S.gameId; if(V3D.gameKey!==newGameKey){V3D.gameKey=newGameKey; V3D.userMoved=false; setTimeout(()=>{if(V3D.active&&!V3D.userMoved) V3D.applyCam(V3D.camMode,true)},0)}
-  const key=B.kind+UI.figStyle+S.teams.map(t=>t.seat+':'+t.pieces.map(p=>p.kind+JSON.stringify(p.abil)).join('/')).join('|');
+  const key=B.kind+S.teams.map(t=>t.seat+':'+t.pieces.map(p=>p.kind+JSON.stringify(p.abil)).join('/')).join('|');
   if(key===V3D.teamKey) return; V3D.teamKey=key;
   Object.values(V3D.pieces).forEach(o=>V3D.scene.remove(o.g)); V3D.pieces={}; V3D.badgeList=[];
   V3D.baseGroup.clear();
@@ -3073,7 +2781,7 @@ V3D.setTeams=function(){
   V3D.turnRing=new THREE.Mesh(new THREE.RingGeometry(B.baseR+.05,B.baseR+.3,96),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false}));
   V3D.turnRing.rotation.x=-Math.PI/2; V3D.turnRing.position.y=.06; V3D.baseGroup.add(V3D.turnRing);
   allPieces().forEach(p=>{
-    const g=new THREE.Group(), rig=UI.figStyle==='tegnet'&&SPRITES[figureKind(p).id]?buildSprite(p):buildFigure(p), holder=new THREE.Group(); holder.add(rig.root);
+    const g=new THREE.Group(), rig=buildSprite(p), holder=new THREE.Group(); holder.add(rig.root);
     const ring=new THREE.Mesh(new THREE.RingGeometry(.3,.42,36),new THREE.MeshBasicMaterial({color:col('#e8c35a'),transparent:true,opacity:0,depthWrite:false}));
     ring.rotation.x=-Math.PI/2; ring.position.y=.03;
     // Aura for brikker, der kan handle: en orange glorie på jorden og et lysende skær om figuren.
@@ -3085,7 +2793,7 @@ V3D.setTeams=function(){
     const safe=new THREE.Sprite(new THREE.SpriteMaterial({map:safeTex(),transparent:true,depthWrite:false,depthTest:false}));
     safe.position.y=2.05; safe.scale.setScalar(.55); safe.visible=false; safe.raycast=()=>{}; safe.renderOrder=5;
     g.add(holder,ring,glow,halo,safe); g.userData.pid=p.id; V3D.scene.add(g);
-    const an=(rig.sprite?dressBadges(p,rig):dressPiece(p,rig.body,rig)).concat(rig.an);
+    const an=dressBadges(p,rig).concat(rig.an);
     V3D.pieces[p.id]={g,holder,rig,ring,glow,halo,safe,an,mats:rig.mats,pos:null,tw:null,state:{},yaw:0,phase:0};
   });
 };
@@ -3650,7 +3358,7 @@ function renderInfo(){
     <div class="meta"><span class="flag">${esc(figureKind(p).name)}</span><span class="hp" title="Heltepoint">★ ${fmtHp(p.hp)} heltepoint</span><span>${stateText(p)}</span>${p.frozen>0?`<span class="flag">Lammet ${p.frozen}</span>`:''}${p.aura?'<span class="flag">Aura</span>':''}${p.invisible?'<span class="flag">Usynlig</span>':''}${p.knocked?'<span class="flag">Ikke længere homerun</span>':''}</div>
     ${mine.length?`<div class="opts">${mine.map(([o,i])=>optHtml(o,i)).join('')}</div>`:''}
     ${(()=>{const a=visibleActs().filter(([x])=>x.pid===p.id&&x.kind!=='uheldig'); return a.length?`<div class="acts">${a.map(actBtn).join('')}</div>`:''})()}
-    ${ids.length?`<ul class="alist">${ids.map(id=>{const A=ABIL[id]; return `<li class="${A.t}"><span class="an">${UI.figStyle==='tegnet'&&BADGES[id]?`<i class="abadge bimg bi-${id}" aria-hidden="true"></i>`:''}${A.name}${A.lvl?`<span class="lvl">niveau ${p.abil[id]}</span>`:''}</span>${(n=>n?`<span class="ad anote">${esc(n)}</span>`:'')(abilNote(p,id))}<span class="ad">${esc(ABIL[id].desc)}</span>${A.note?`<span class="ad muted">${esc(A.note)}</span>`:''}${LOOK[id]&&UI.figStyle!=='tegnet'?`<span class="ad look">På 3D-figuren: ${esc(LOOK[id].txt)}</span>`:''}</li>`}).join('')}</ul>`:'<p class="muted" style="margin:0">Ingen evner endnu. Den er bare en helt helt almindelig brik.</p>'}
+    ${ids.length?`<ul class="alist">${ids.map(id=>{const A=ABIL[id]; return `<li class="${A.t}"><span class="an">${BADGES[id]?`<i class="abadge bimg bi-${id}" aria-hidden="true"></i>`:''}${A.name}${A.lvl?`<span class="lvl">niveau ${p.abil[id]}</span>`:''}</span>${(n=>n?`<span class="ad anote">${esc(n)}</span>`:'')(abilNote(p,id))}<span class="ad">${esc(ABIL[id].desc)}</span>${A.note?`<span class="ad muted">${esc(A.note)}</span>`:''}</li>`}).join('')}</ul>`:'<p class="muted" style="margin:0">Ingen evner endnu. Den er bare en helt helt almindelig brik.</p>'}
     ${ids.length?'':'<div class="meta">Ingen særlige evner.</div>'}
 
   </div>`;
@@ -4116,7 +3824,6 @@ document.addEventListener('click',e=>{
       if(UI.view==='3d'&&!has3D()){UI.viewMsg='Henter 3D…'; load3D().then(ok=>{UI.viewMsg=ok?'':'3D kunne ikke hentes. Tjek forbindelsen.'; if(!ok) UI.view='2d'; render()})}
       else UI.viewMsg='';
       break}
-    case 'figstyle': UI.figStyle=UI.figStyle==='tegnet'?'3d':'tegnet'; try{localStorage.setItem('helteludo.figurer',UI.figStyle)}catch(e){} break;
     case 'gfx': UI.gfx={auto:'hoj',hoj:'lav',lav:'auto'}[UI.gfx]; try{localStorage.setItem('helteludo.grafik',UI.gfx)}catch(e){} if(V3D.active){V3D.applyQuality(UI.gfx==='lav'?'lav':'hoj'); V3D.fps=UI.gfx==='auto'?{t0:performance.now(),n:0}:null} UI.viewMsg=''; break;
     case 'music': MUSIC.on=!MUSIC.on; try{localStorage.setItem('helteludo.musik',MUSIC.on?'1':'0')}catch(e){} if(MUSIC.on){const c=actx(); if(c) c.resume().then(musicStart).catch(()=>{})} else musicStop(); break;
     case 'speed': UI.speed={langsom:'normal',normal:'hurtig',hurtig:'langsom'}[UI.speed]; try{localStorage.setItem('helteludo.tempo',UI.speed)}catch(e){} break;

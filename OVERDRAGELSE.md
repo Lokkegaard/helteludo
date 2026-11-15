@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 57.
+- Filen `helteludo.html` i denne mappe er identisk med version 58.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -349,3 +349,6 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 
 ## Computeren står ikke stille med Aura (version 57)
 - Motortesten fandt, at en serie af runder kunne gå i stå: med mange evner valgte computeren »tænd aura« tur efter tur, og stod brikken samtidig som Bredskuldret og spærrede vejen, kom ingen videre. Nu tæller `p.auraN` aura-ture i træk (nulstilles, når brikken flytter, i `finishAction`), og `scoreOpt` trækker 14 pr. tur fra aura/usynlighed. 2.400 serier á 5 runder gik igennem uden fastlåsning.
+
+## 3D-brikkerne er fjernet (version 58)
+- Kun de tegnede figurer (`SPRITES`, `buildSprite`) bruges nu, både i 2D og 3D. De byggede 3D-figurer (`buildFigure`, `lathe`, `taper`), deres udstyr pr. evne (`LOOK`, `GEAR`, `GEAR_TF`, `dressPiece`), menupunktet »Figurer: tegnede/3D« (`UI.figStyle`, `figstyle`) og noten »På 3D-figuren: …« er slettet (ca. 31 KB). Evnerne vises som før med mærker (`BADGES`, `dressBadges`).
