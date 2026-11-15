@@ -43,6 +43,8 @@ sej/kampivrig/kommandosoldat→dværg · stifinder/globetrotter/booster→elver 
 - localStorage-nøgler: `helteludo.spil`, `.vejledning`, `.online`, `.figurer`, `.grafik`, `.lyd`, `.musik`, `.visning`.
 
 ## Tests (mappen `tests/`)
+**Motortest: `node tests/motor.js`** (kræver kun Node, ingen pakker; tager under et sekund). Den henter spillets største `<script>` direkte fra `helteludo.html` og kører det i en `vm`-kontekst med en falsk browser, så testen altid følger den aktuelle kode (den gamle kopi `motor-braet.js` er fjernet). 22 tests: brætterne, Heltetabellen, 60 hele computerspil med 2–4 hold, runde 1, opstigning/nedstigning, fem runder med sejre og Afslut, startende hold på skift, tælleren, Forbandet/Ærkefjende, »Vælg selv«, terningstatistik, gemte spil, Bakgear på stjerne, Ingen stedsans og fortryd, betinget sikkerhed, sikre landingsfelter og hvem der må fortsætte online. Afslutter med kode 1 ved fejl. En anden fil kan testes med `node tests/motor.js sti.html` (version 54 giver 7 fejl – præcis det, version 55–56 rettede).
+
 Playwright-scripts (headless Chromium): `test2.js` (motor 60 spil, UI/AI, online med falsk db i `mock.js`), `t3d.js` (3D), `sprt.js` (tegnede figurer). De blev skrevet til cloud-miljøet, så **stier skal rettes** (de pegede på en scratchpad-mappe og en lokal kopi af `three@0.128.0`, der blev serveret i stedet for jsdelivr). Kræver Node + `npm i playwright three@0.128.0`.
 
 Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med flere enheder, og om lyden lyder godt på rigtige enheder.
