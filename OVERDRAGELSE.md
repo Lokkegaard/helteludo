@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 59.
+- Filen `helteludo.html` i denne mappe er identisk med version 60.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -359,3 +359,6 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - **Art ud fra evne:** `ABIL_KIND` giver nu en liste af arter pr. evne (fx Sej → Dværg eller Ridder; Bersærk → Minotaur, Bjørnefolk eller Yeti). `kindFor(p, id)` vælger en art fra listen, helst en ingen anden brik har. Alle 32 arter kan opstå.
 - **Tegningerne:** lavet med Canvas billedgenerator ud fra de gamle referencetegninger (`MAHZGsD55BM`, `MAHZGuwEgas`), fritlagt med Canva og hentet i fuld størrelse fra `canva.com/M/<id>` (siden viser billedet i 899×1600; URL'en kan hentes med curl). Originalerne ligger som WebP i `tegninger/figurer/`, med `oversigt.png` over alle arter i de fire holdfarver. De gamle tegninger er flyttet til `tegninger/gamle-figurer/`. I spillet er de 560 px høje (ca. 40 KB hver, 1,3 MB i alt).
 - Ny tegning: bed om tøj i »plain vivid MAGENTA cloth (#FF00FF, the only magenta in the picture)« og ingen anden lyserød/lilla; tilføj den til `SPRITES`, `KINDS` og mindst én evne i `ABIL_KIND`.
+
+## Faun og Ridder tegnet igen (version 60)
+- Faunens tørklæde havde en lyserød rest, der ikke blev farvet om, og ridderens våbenkjole var hvid. Begge er tegnet igen med alt tøj i ren magenta (Ridder: våbenkjole, kappe og fjerbusk). Originaler i `tegninger/figurer/`, `oversigt.png` er opdateret.
