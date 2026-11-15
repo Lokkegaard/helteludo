@@ -52,6 +52,18 @@ test('brætterne har den rigtige størrelse',()=>{
   assert.deepStrictEqual([...b.quad.STAR_REL].slice(0,2),[5,11]);
 });
 
+// ---------- Arter ----------
+test('32 arter med tegning, og hver evne giver en art med tegning',()=>{
+  const K=$('KINDS'), SP=$('SPRITES'), AK=$('ABIL_KIND');
+  assert.strictEqual(K.length,32); K.forEach(k=>assert.ok(SP[k.id]&&SP[k.id].src.startsWith('data:image/webp'),k.id));
+  Object.keys($('ABIL')).forEach(id=>{assert.ok(AK[id]&&AK[id].length,id); AK[id].forEach(k=>assert.ok(K.some(x=>x.id===k),k))});
+  K.forEach(k=>assert.ok(Object.values(AK).some(v=>v.includes(k.id)),'ingen evne giver '+k.id));
+});
+test('første evne giver en art fra evnens liste',()=>{
+  G.newGame(cfg(4),$('DEF_OPTS')); heroesDone();
+  S().teams.forEach(t=>t.pieces.forEach(p=>{if(p.origin) assert.ok($('ABIL_KIND')[p.origin].includes(p.kind),p.origin+' -> '+p.kind)}));
+});
+
 // ---------- Heltetabellen ----------
 test('rollAbility giver kun evner, brikken kan få',()=>{
   for(let k=0;k<2000;k++){const abil={hurtig:4,aura:1}; const r=G.rollAbility(abil); if(r.id&&r.id!=='@valg') assert.ok(G.canGain(abil,r.id),r.id)}

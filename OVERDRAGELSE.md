@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 58.
+- Filen `helteludo.html` i denne mappe er identisk med version 59.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -43,7 +43,7 @@ sej/kampivrig/kommandosoldat→dværg · stifinder/globetrotter/booster→elver 
 - localStorage-nøgler: `helteludo.spil`, `.vejledning`, `.online`, `.figurer`, `.grafik`, `.lyd`, `.musik`, `.visning`.
 
 ## Tests (mappen `tests/`)
-**Motortest: `node tests/motor.js`** (kræver kun Node, ingen pakker; tager under et sekund). Den henter spillets største `<script>` direkte fra `helteludo.html` og kører det i en `vm`-kontekst med en falsk browser, så testen altid følger den aktuelle kode (den gamle kopi `motor-braet.js` er fjernet). 23 tests: brætterne, Heltetabellen, 60 hele computerspil med 2–4 hold, 40 serier á 5 runder, runde 1, opstigning/nedstigning, fem runder med sejre og Afslut, startende hold på skift, tælleren, Forbandet/Ærkefjende, »Vælg selv«, terningstatistik, gemte spil, Bakgear på stjerne, Ingen stedsans og fortryd, betinget sikkerhed, sikre landingsfelter og hvem der må fortsætte online. Afslutter med kode 1 ved fejl. En anden fil kan testes med `node tests/motor.js sti.html` (version 54 giver 7 fejl – præcis det, version 55–56 rettede).
+**Motortest: `node tests/motor.js`** (kræver kun Node, ingen pakker; tager under et sekund). Den henter spillets største `<script>` direkte fra `helteludo.html` og kører det i en `vm`-kontekst med en falsk browser, så testen altid følger den aktuelle kode (den gamle kopi `motor-braet.js` er fjernet). 25 tests: brætterne, arterne, Heltetabellen, 60 hele computerspil med 2–4 hold, 40 serier á 5 runder, runde 1, opstigning/nedstigning, fem runder med sejre og Afslut, startende hold på skift, tælleren, Forbandet/Ærkefjende, »Vælg selv«, terningstatistik, gemte spil, Bakgear på stjerne, Ingen stedsans og fortryd, betinget sikkerhed, sikre landingsfelter og hvem der må fortsætte online. Afslutter med kode 1 ved fejl. En anden fil kan testes med `node tests/motor.js sti.html` (version 54 giver 7 fejl – præcis det, version 55–56 rettede).
 
 Playwright-scripts (headless Chromium): `test2.js` (motor 60 spil, UI/AI, online med falsk db i `mock.js`), `t3d.js` (3D), `sprt.js` (tegnede figurer). De blev skrevet til cloud-miljøet, så **stier skal rettes** (de pegede på en scratchpad-mappe og en lokal kopi af `three@0.128.0`, der blev serveret i stedet for jsdelivr). Kræver Node + `npm i playwright three@0.128.0`.
 
@@ -352,3 +352,10 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 
 ## 3D-brikkerne er fjernet (version 58)
 - Kun de tegnede figurer (`SPRITES`, `buildSprite`) bruges nu, både i 2D og 3D. De byggede 3D-figurer (`buildFigure`, `lathe`, `taper`), deres udstyr pr. evne (`LOOK`, `GEAR`, `GEAR_TF`, `dressPiece`), menupunktet »Figurer: tegnede/3D« (`UI.figStyle`, `figstyle`) og noten »På 3D-figuren: …« er slettet (ca. 31 KB). Evnerne vises som før med mærker (`BADGES`, `dressBadges`).
+
+## 32 arter med tøj i holdets farve (version 59)
+- **16 nye arter:** Gnom, Halvling, Kentaur, Havfolk, Mumie, Vampyr, Frøfolk, Ravnefolk, Træfolk, Svampefolk, Bjørnefolk, Musefolk, Smådjævel, Ridder, Heks og Yeti. De 16 gamle er tegnet igen i samme stil. `KINDS` har nu kun `id` og `name`.
+- **Tøjet følger holdets farve:** alle tegninger er lavet med tøjet i ren magenta. `teamFigure(id, seat)` tegner figuren på et lærred og farver pixels i magenta-tonerne (farvetone 260–350°, mætning over 0,25) om til holdets farve, så lysheden – skygger og stof – bevares (`recolorFigure`). Resultatet gemmes pr. art og hold (`FIG_CACHE`). 3D bruger lærredet som `CanvasTexture` (`buildSprite`), 2D (»Dagens helte«) bruger `figClass(id, seat)`, der lægger billedet i en CSS-regel `.fs-<id>.st<seat>`, når det er klar.
+- **Art ud fra evne:** `ABIL_KIND` giver nu en liste af arter pr. evne (fx Sej → Dværg eller Ridder; Bersærk → Minotaur, Bjørnefolk eller Yeti). `kindFor(p, id)` vælger en art fra listen, helst en ingen anden brik har. Alle 32 arter kan opstå.
+- **Tegningerne:** lavet med Canvas billedgenerator ud fra de gamle referencetegninger (`MAHZGsD55BM`, `MAHZGuwEgas`), fritlagt med Canva og hentet i fuld størrelse fra `canva.com/M/<id>` (siden viser billedet i 899×1600; URL'en kan hentes med curl). Originalerne ligger som WebP i `tegninger/figurer/`, med `oversigt.png` over alle arter i de fire holdfarver. De gamle tegninger er flyttet til `tegninger/gamle-figurer/`. I spillet er de 560 px høje (ca. 40 KB hver, 1,3 MB i alt).
+- Ny tegning: bed om tøj i »plain vivid MAGENTA cloth (#FF00FF, the only magenta in the picture)« og ingen anden lyserød/lilla; tilføj den til `SPRITES`, `KINDS` og mindst én evne i `ABIL_KIND`.
