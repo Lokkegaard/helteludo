@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 56.
+- Filen `helteludo.html` i denne mappe er identisk med version 57.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -43,7 +43,7 @@ sej/kampivrig/kommandosoldat→dværg · stifinder/globetrotter/booster→elver 
 - localStorage-nøgler: `helteludo.spil`, `.vejledning`, `.online`, `.figurer`, `.grafik`, `.lyd`, `.musik`, `.visning`.
 
 ## Tests (mappen `tests/`)
-**Motortest: `node tests/motor.js`** (kræver kun Node, ingen pakker; tager under et sekund). Den henter spillets største `<script>` direkte fra `helteludo.html` og kører det i en `vm`-kontekst med en falsk browser, så testen altid følger den aktuelle kode (den gamle kopi `motor-braet.js` er fjernet). 22 tests: brætterne, Heltetabellen, 60 hele computerspil med 2–4 hold, runde 1, opstigning/nedstigning, fem runder med sejre og Afslut, startende hold på skift, tælleren, Forbandet/Ærkefjende, »Vælg selv«, terningstatistik, gemte spil, Bakgear på stjerne, Ingen stedsans og fortryd, betinget sikkerhed, sikre landingsfelter og hvem der må fortsætte online. Afslutter med kode 1 ved fejl. En anden fil kan testes med `node tests/motor.js sti.html` (version 54 giver 7 fejl – præcis det, version 55–56 rettede).
+**Motortest: `node tests/motor.js`** (kræver kun Node, ingen pakker; tager under et sekund). Den henter spillets største `<script>` direkte fra `helteludo.html` og kører det i en `vm`-kontekst med en falsk browser, så testen altid følger den aktuelle kode (den gamle kopi `motor-braet.js` er fjernet). 23 tests: brætterne, Heltetabellen, 60 hele computerspil med 2–4 hold, 40 serier á 5 runder, runde 1, opstigning/nedstigning, fem runder med sejre og Afslut, startende hold på skift, tælleren, Forbandet/Ærkefjende, »Vælg selv«, terningstatistik, gemte spil, Bakgear på stjerne, Ingen stedsans og fortryd, betinget sikkerhed, sikre landingsfelter og hvem der må fortsætte online. Afslutter med kode 1 ved fejl. En anden fil kan testes med `node tests/motor.js sti.html` (version 54 giver 7 fejl – præcis det, version 55–56 rettede).
 
 Playwright-scripts (headless Chromium): `test2.js` (motor 60 spil, UI/AI, online med falsk db i `mock.js`), `t3d.js` (3D), `sprt.js` (tegnede figurer). De blev skrevet til cloud-miljøet, så **stier skal rettes** (de pegede på en scratchpad-mappe og en lokal kopi af `three@0.128.0`, der blev serveret i stedet for jsdelivr). Kræver Node + `npm i playwright three@0.128.0`.
 
@@ -246,7 +246,7 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 ## Netlify (version 48)
 - Spillet ligger også på https://helteludo.netlify.app/ (Netlify-projekt `helteludo` i teamet »Padel Planner«, site-id `357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263`).
 - `netlify.toml` udgiver kun `index.html` og `helteludo.html` (byggekommando kopierer dem til `dist/`, som ikke er i git).
-- **Netlify kører motortesten først** (`node tests/motor.js`, Node 22). Fejler en test, fejler bygget, og den forrige version forbliver online; se fejlen i Netlifys bygge-log.
+- **Netlify kører motortesten først** (`node tests/motor.js`, Node 22). Fejler en test, fejler bygget, og den forrige version forbliver online; se fejlen i Netlifys bygge-log. Testene bruger tilfældige slag; de er kørt 100+ gange uden fejl, men en sjælden fejl kan vise en rigtig, sjælden fejl i spillet.
 - **Automatisk udgivelse:** GitHub-repositoriet er koblet til Netlify (gren `main`, Netlifys GitHub-app). Hvert `git push` til `main` bygger og udgiver siden af sig selv med kommandoen fra `netlify.toml`.
 - Manuel udgivelse, hvis det skulle blive nødvendigt: `mkdir -p dist && cp index.html helteludo.html dist/ && netlify deploy --prod --dir dist --site 357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263 --no-build`.
 - Online-spil bruger den direkte forbindelse fra version 48, så alle kan spille online uden login. Spillere på Netlify- og GitHub-siden kan være med i det samme spil, fordi PeerJS-id'erne er fælles.
@@ -346,3 +346,6 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - **Online kan en anden spiller fortsætte:** »Næste runde« og »Afslut spillet« må bruges af `canLeadOnline()` – værten, eller den tilstedeværende spiller, der styrer computerholdene (`aiDriver`), når værten er væk. Gemningen tjekker `rev`, så to samtidige klik ikke giver to runder.
 - **»Vælg selv« uden evner tilbage:** har brikken alle evner på højeste niveau, gives ingen ny evne i stedet for en tom liste; `autoValg` vælger blandt alle mulige evner, når de seks foretrukne er brugt op.
 - Testet: fire runder i træk med samme forbandelse og ærkefjende og startende hold 1, 2, 3, 0; uden evnen blev forbandelsen 0; tælleren »slag 1 af 2, slag 2 af 2« og derefter nedstigning; »Vælg selv« med alle evner gik videre; `canLeadOnline` er sand, når værten er væk, og falsk, når værten er til stede.
+
+## Computeren står ikke stille med Aura (version 57)
+- Motortesten fandt, at en serie af runder kunne gå i stå: med mange evner valgte computeren »tænd aura« tur efter tur, og stod brikken samtidig som Bredskuldret og spærrede vejen, kom ingen videre. Nu tæller `p.auraN` aura-ture i træk (nulstilles, når brikken flytter, i `finishAction`), og `scoreOpt` trækker 14 pr. tur fra aura/usynlighed. 2.400 serier á 5 runder gik igennem uden fastlåsning.

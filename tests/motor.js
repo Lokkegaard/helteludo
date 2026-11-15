@@ -66,6 +66,10 @@ for(const n of [2,3,4]) test(`20 computerspil med ${n} hold bliver færdige`,()=
   assert.strictEqual(S().board,n===3?'tri':'quad');
 });
 
+test('40 serier á 5 runder bliver færdige (evnerne hober sig op uden at låse spillet)',()=>{
+  for(let g=0;g<40;g++){G.newGame(cfg(4),$('DEF_OPTS')); for(let r=1;r<=5;r++){playRound(); if(r<5) G.nextRound()}}
+});
+
 // ---------- Runde 1 ----------
 test('runde 1 starter uden evner og slår 6 gange pr. hold',()=>{
   G.newGame(cfg(4),$('DEF_OPTS'));
@@ -101,9 +105,10 @@ test('fem runder: sejre og historik passer, spillet slutter først ved Afslut',(
 });
 test('det startende hold går på skift',()=>{
   G.newGame(cfg(4),$('DEF_OPTS')); const firsts=[];
-  for(let r=1;r<=5;r++){firsts.push([S().first,S().heroQ?S().heroQ[0].ti:null]); heroesDone(); assert.strictEqual(S().cur,S().first); playRound(); G.nextRound()}
+  for(let r=1;r<=5;r++){firsts.push([S().first,(S().heroQ||[]).map(x=>x.ti)]); heroesDone(); assert.strictEqual(S().cur,S().first); playRound(); G.nextRound()}
   assert.deepStrictEqual(firsts.map(f=>f[0]),[0,1,2,3,0]);
-  firsts.forEach(([f,h])=>{if(h!=null) assert.strictEqual(h,f)});
+  // Opstigningen går i holdrækkefølge fra det startende hold (et hold uden slag springes bare over).
+  firsts.forEach(([f,q])=>{const ord=q.map(ti=>(ti-f+4)%4); assert.strictEqual(JSON.stringify(ord),JSON.stringify([...ord].sort((a,b)=>a-b)))});
 });
 test('tælleren i opstigningen tæller kun slag på Heltetabellen',()=>{
   G.newGame(cfg(4),$('DEF_OPTS')); playRound();
@@ -117,7 +122,7 @@ test('Forbandet og Ærkefjende beholdes, til evnen mistes',()=>{
   const t=()=>S().teams[1], p=()=>t().pieces[0], c0=t().curse, h0=p().hates;
   assert.ok(c0>=1&&c0<=6); assert.ok(h0!=null&&h0!==1);
   for(let r=0;r<4;r++){playRound(); p().abil.forbandet=1; p().abil.aerkefjende=1; S().teams.forEach(t=>t.pieces.forEach(q=>q.hp=0)); G.nextRound(); assert.strictEqual(t().curse,c0); assert.strictEqual(p().hates,h0)}
-  playRound(); delete p().abil.forbandet; delete p().abil.aerkefjende; S().teams.forEach(t=>t.pieces.forEach(q=>q.hp=0)); G.nextRound();
+  playRound(); t().pieces.forEach(q=>{delete q.abil.forbandet; delete q.abil.aerkefjende}); S().teams.forEach(t=>t.pieces.forEach(q=>q.hp=0)); G.nextRound();
   assert.strictEqual(t().curse,0); assert.strictEqual(p().hates,null);
 });
 test('nedstigning fjerner et niveau eller en evne',()=>{

@@ -1331,7 +1331,7 @@ function execute(i){
   S.anim={seq:(S.anim?S.anim.seq:0)+1, pid:p.id, steps:animSteps(p,o), ai:!!team().ai};
   const before={}; allPieces().forEach(q=>{if(onBoard(q)) before[q.id]=piecePos(q).pt});
   switch(o.kind){
-    case 'aura': p.aura=true; pop(p,'Aura','info'); log(`${p.name} tænder sin aura og står i sikkerhed til næste tur.`,p.team); break;
+    case 'aura': p.aura=true; p.auraN=(p.auraN||0)+1; pop(p,'Aura','info'); log(`${p.name} tænder sin aura og står i sikkerhed til næste tur.`,p.team); break;
     case 'invis': p.invisible=true; pop(p,'Usynlig','info'); log(`${p.name} bliver usynlig.`,p.team); break;
     case 'explode': explode(p); break;
     case 'homing': p.rel=o.rel; p.invisible=false; pop(p,'Målsøgende!','info'); log(`${p.name} teleporterer sig ind lige bag ${pc(o.tq).name}.`,p.team); break;
@@ -1375,6 +1375,7 @@ function execute(i){
   finishAction(p,o,moved);
 }
 function finishAction(p,o,moved){
+  if(moved) p.auraN=0;
   if(S.over){S.phase='over'; S.msg=''; return}
   const t=team();
   if(S.finished.includes(S.cur)||(!['move','exit','raid','raidmove'].includes(o.kind)&&!house('altExtra'))) return endTurn();
@@ -1410,7 +1411,8 @@ function scoreOpt(o){
   if(o.kind==='raid'||o.kind==='raidmove'){const out=o.out||{}; return (out.type==='knock'?55:out.type==='bounce'?-90:-6)+(o.exit?((o.rel===B.GOAL?B.GOAL+1:o.rel)-p.rel)*1.2:0)+(out.type==='goal'?120:0)}
   switch(o.kind){
     case 'exit': return 32+(inPlay(team())?0:25)+(o.out&&o.out.type==='knock'?35:0);
-    case 'aura': case 'invis': return threatAt(p,p.rel)*(hard?22:16)-8;
+    // Aura flere ture i træk bliver mindre og mindre fristende, så computeren ikke står stille for evigt (fx som Bredskuldret, der spærrer vejen).
+    case 'aura': case 'invis': return threatAt(p,p.rel)*(hard?22:16)-8-(p.auraN||0)*14;
     case 'explode': {const v=blastVictims(p).filter(q=>q!==p), opp=v.filter(q=>q.team!==p.team).length; return opp*32-(v.length-opp)*40-20-p.rel*.4}
     case 'homing': return -25;
   }
