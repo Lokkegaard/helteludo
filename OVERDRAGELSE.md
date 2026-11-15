@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 53.
+- Filen `helteludo.html` i denne mappe er identisk med version 54.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -314,3 +314,19 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 3. **Heldig/Uheldig/Booster låste næste slag:** gav omslaget intet træk med forsøg tilbage, blev `S.restrict` stående, så næste slag kun kunne bruges af den ene brik. `afterRollCompute` nulstiller nu `restrict` og `boost`, når turen går tilbage til et nyt slag.
 4. **Online-lås blev ikke frigivet:** når `withLock` ikke skrev noget (afvist træk, forkert spilkode, fuldt spil), holdt låsen i 5 sekunder og kunne give »Trækket kunne ikke gemmes« hos de andre. Nu kaldes `ref.release` (Supabase: ny funktion `helteludo_release` i `server/supabase.sql`, som også sletter rene låserækker; direkte forbindelse: `H.release`). I claude.ai-artefaktet findes `release` ikke, og låsen udløber som før.
 - Testet: gammelt gemt spil fundet og bevaret; et hold fik præcis 6 evner efter afbrudt Heltetabel; den næste 6'er kunne bruges af alle fire brikker; forkert spilkode efterlod ingen række; efter en afvist skrivning fik en anden spiller låsen med det samme; 6 hele computerspil med Heltetabellen.
+
+## Spil i runder og fem fejlrettelser (version 54)
+**Runder**
+- Et spil består af runder og slutter først, når spillerne vælger »Afslut spillet« (`endSeries`, `S.ended`). `S.over` betyder nu kun, at runden er slut.
+- Runde 1 starter altid uden evner (`teamData` giver tomme evner); holdene slår deres 6 slag på Heltetabellen (fordelingen fra opstillingen, ellers 2-2-1-1). Holdenes evner gemmes ikke længere på opstillingen (`rolled`, »Nulstil holdets evner« og knappen »Rul« er væk).
+- Når en runde er slut, viser rundeoverblikket podium, dagens helte, stillingen i vundne runder (`S.wins`), og hvad hver brik får i opstigning. »Næste runde« (`nextRound`) starter en ny runde med samme hold og evner og samme spil-id. Den begynder med opstigning i `heroes`-fasen: for hver 2 heltepoint et slag på Heltetabellen, for hver 2 minuspoint et tabt niveau i en tilfældig evne (`heroLose`; husreglen »Minuspoint fjerner en hel evne« gælder). Mister en brik Forbandet eller Ærkefjende, forsvinder virkningen.
+- `S.round`, `S.wins`, `S.history` (rundernes rækkefølge), terningstatistik, `popSeq` og `rollSeq` føres videre mellem runderne. Stillingsbjælken viser »R2« og 🏆 for vundne runder.
+- Gemte spil gemmes også mellem runderne og fjernes først, når spillet afsluttes; listen viser runden. Heltebogen registrerer hver runde (nøgle `gameId:runde`).
+- Online: kun værten kan starte næste runde og afslutte spillet; serverens status er »playing«, indtil spillet afsluttes (`status: state.ended`).
+
+**Fejlrettelser**
+- Spil i gang gemmes i 30 dage (før 2 døgn på serveren og 48 timer i listen; også værtsdata ved direkte forbindelse).
+- Baglæns ind på en stjerne (Bakgear, Ingen stedsans, Hjemve) hopper nu en stjerne frem (`pushVariants`).
+- Ingen stedsans slår først, når brikken er valgt til at flytte (`execute`); er den forvirret, går den slaget baglæns, eller bliver stående, hvis det ikke kan lade sig gøre.
+- Landingsfeltet markeres, når det er sikkert (`safeAt`): 🛡️ og »Sikkert felt« på trækket og et grønt mål-felt.
+- Betinget sikkerhed: en brik på et andet holds startfelt er »betinget sikker« (gult skjold, `isSafe` → 'cond'), så længe det hold har brikker hjemme; ellers helt sikker.

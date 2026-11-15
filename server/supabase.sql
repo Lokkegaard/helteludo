@@ -26,7 +26,7 @@ do $$ begin
   end if;
 end $$;
 
--- Skriv et dokument (og frigiv en eventuel lås). Rydder samtidig gamle spil (over 2 døgn) op.
+-- Skriv et dokument (og frigiv en eventuel lås). Rydder samtidig gamle spil (over 30 dage) op.
 create or replace function public.helteludo_set(p_path text, p_data jsonb)
 returns void language plpgsql security definer set search_path = public as $$
 begin
@@ -35,7 +35,7 @@ begin
   insert into helteludo_docs (path, parent, data, lock_holder, lock_until, updated_at)
     values (p_path, regexp_replace(p_path, '/[^/]*$', ''), p_data, null, null, now())
     on conflict (path) do update set data = excluded.data, lock_holder = null, lock_until = null, updated_at = now();
-  if random() < 0.02 then delete from helteludo_docs where updated_at < now() - interval '2 days'; end if;
+  if random() < 0.02 then delete from helteludo_docs where updated_at < now() - interval '30 days'; end if;
 end $$;
 
 -- Slet et dokument og alt under det (fx et spil og dets "seen"-dokumenter).
