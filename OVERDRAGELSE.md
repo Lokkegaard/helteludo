@@ -10,7 +10,7 @@ Jeg (Henrik) får bygget en digital udgave af brætspillet **Helteludo** (ludo m
 - Svar mig altid på **dansk**.
 - Opdater **samme artifact** (send `url` med ved publicering; læs den først med `action: "read"`). Lav ikke et nyt link.
 - Artifacten bruger kapabiliteterne **db** (online-spil) og **user** (profiler). Behold dem ved publicering.
-- Filen `helteludo.html` i denne mappe er identisk med version 54.
+- Filen `helteludo.html` i denne mappe er identisk med version 55.
 
 ## Hvad der er bygget (alt virker og er testet)
 - **Regler/motor:** fuld Helteludo med evnetabel (32 evner), stjerner, globusser, slag, Kommandosoldat-raids, Uheldig-genslag mod hver modstander, husregler (indstillingspanel), gem/fortsæt spil, vejledning for nye spillere, Heltebog med statistik og historik.
@@ -330,3 +330,9 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 - Ingen stedsans slår først, når brikken er valgt til at flytte (`execute`); er den forvirret, går den slaget baglæns, eller bliver stående, hvis det ikke kan lade sig gøre.
 - Landingsfeltet markeres, når det er sikkert (`safeAt`): 🛡️ og »Sikkert felt« på trækket og et grønt mål-felt.
 - Betinget sikkerhed: en brik på et andet holds startfelt er »betinget sikker« (gult skjold, `isSafe` → 'cond'), så længe det hold har brikker hjemme; ellers helt sikker.
+
+## Fejlrettelser efter kodegennemgang af runderne (version 55)
+1. **Terningstatistikken blev talt dobbelt fra runde 2:** `S.dice` føres videre mellem runderne (statistik for hele spillet), men `recordGame` lagde hele `S.dice` til Heltebogen efter hver runde. Nu tæller `countDie` også rundens slag i `S.rdice`, og kun de skrives i Heltebogen (gemte spil fra version 54 uden `S.rdice` bruger `S.dice` i runde 1 og springer over i senere runder).
+2. **Fortryd kunne bruges til at slå om:** slag under selve trækket (Ingen stedsans, Pacifist m.fl.) kunne fortrydes og slås igen. `d6` tæller nu alle slag (`D6N`), og `chooseOpt` fjerner fortryd, hvis der blev slået under trækket.
+- Testet: tre runder med computerhold gav Heltebogen præcis summen af rundernes slag; et træk med Ingen stedsans kunne ikke fortrydes, et almindeligt træk kunne.
+- Ikke rettet (småting fra gennemgangen): Forbandet og Ærkefjende slås om hver runde; første hold starter altid; tælleren i opstigningen tæller nedstigninger med; online kan kun værten fortsætte; opstigning kan i teorien gå i stå, hvis »Vælg selv« ikke har nogen evner tilbage.

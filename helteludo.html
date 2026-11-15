@@ -724,7 +724,8 @@ function ensureBoard(){const k=boardOf(S); if(B.kind!==k) useBoard(k)}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const mod=(a,n)=>((a%n)+n)%n;
-const d6=()=>1+Math.floor(Math.random()*6);
+// D6N tæller alle slag, så et træk, hvor der blev slået undervejs (fx Ingen stedsans), ikke kan fortrydes og slås om.
+let D6N=0; const d6=()=>(D6N++,1+Math.floor(Math.random()*6));
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const clone=x=>JSON.parse(JSON.stringify(x));
@@ -1225,7 +1226,8 @@ function afterRollCompute(){
   S.phase='done'; S.msg='Ingen mulige træk.';
 }
 // Terningstatistik: hvert holds slag (inkl. omslag og boosterterninger) tælles pr. øjental i spillets tilstand.
-function countDie(ti,v){if(!(v>=1&&v<=6)) return; S.dice=S.dice||{}; const a=S.dice[ti]=S.dice[ti]||[0,0,0,0,0,0]; a[v-1]++}
+// S.dice tæller hele spillets slag (alle runder), S.rdice kun rundens, som skrives i Heltebogen, når runden slutter.
+function countDie(ti,v){if(!(v>=1&&v<=6)) return; for(const k of ['dice','rdice']){S[k]=S[k]||{}; const a=S[k][ti]=S[k][ti]||[0,0,0,0,0,0]; a[v-1]++}}
 function useReroll(i){
   const a=rerollActions()[i]; if(!a) return;
   const p=pc(a.pid); UI.undo=null;
@@ -1858,7 +1860,7 @@ function recordGame(){
     const ti=S.teams.indexOf(t), place=S.finished.indexOf(ti)+1, rs=R.seats[t.seat];
     const st=rs.stats=rs.stats||{games:0,wins:0,places:[0,0,0,0],points:0,knocks:0,knocked:0,goals:0,homeruns:0};
     st.games++; if(place===1) st.wins++; st.places[place-1]++; st.points+=n-place;
-    const dd=(S.dice||{})[ti]; if(dd){rs.dice=rs.dice||[0,0,0,0,0,0]; dd.forEach((c,k)=>rs.dice[k]+=c)}
+    const dd=(S.rdice||((S.round||1)===1?S.dice:null)||{})[ti]; if(dd){rs.dice=rs.dice||[0,0,0,0,0,0]; dd.forEach((c,k)=>rs.dice[k]+=c)}
     rs.games=st.games;
     t.pieces.forEach((p,i)=>{const rp=rs.pieces[i]; if(!rp) return; const ps=rp.st=rp.st||{games:0,knocks:0,knocked:0,goals:0,homeruns:0,hp:0};
       ps.games++; ['knocks','knocked','goals','homeruns'].forEach(k=>{ps[k]+=p.st[k]; st[k]+=p.st[k]}); ps.hp+=p.hp});
@@ -3344,7 +3346,7 @@ function pieceChoices(pid){
 function chooseOpt(i){
   if(!S||!myHumanTurn()||UI.committing||S.phase!=='choose'||!S.options[i]) return;
   if(!isOnline()) UI.undo={S:clone(S)}; UI.info=null; UI.sel=null; UI.hover=null; UI.hoverPid=null;
-  act0(()=>execute(i));
+  act0(()=>{const n=D6N; execute(i); if(D6N!==n) UI.undo=null});
 }
 // Står der en brik på et af den valgte briks målfelter, betyder et tryk på den: flyt dertil.
 function targetAt(pt){
