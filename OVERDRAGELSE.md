@@ -246,6 +246,7 @@ Ikke testet endnu: online-genforbindelse og værtsskifte på den rigtige db med 
 ## Netlify (version 48)
 - Spillet ligger også på https://helteludo.netlify.app/ (Netlify-projekt `helteludo` i teamet »Padel Planner«, site-id `357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263`).
 - `netlify.toml` udgiver kun `index.html` og `helteludo.html` (byggekommando kopierer dem til `dist/`, som ikke er i git).
+- **Netlify kører motortesten først** (`node tests/motor.js`, Node 22). Fejler en test, fejler bygget, og den forrige version forbliver online; se fejlen i Netlifys bygge-log.
 - **Automatisk udgivelse:** GitHub-repositoriet er koblet til Netlify (gren `main`, Netlifys GitHub-app). Hvert `git push` til `main` bygger og udgiver siden af sig selv med kommandoen fra `netlify.toml`.
 - Manuel udgivelse, hvis det skulle blive nødvendigt: `mkdir -p dist && cp index.html helteludo.html dist/ && netlify deploy --prod --dir dist --site 357cda4a-f3fe-4dd4-8aaf-e7d0b4fbd263 --no-build`.
 - Online-spil bruger den direkte forbindelse fra version 48, så alle kan spille online uden login. Spillere på Netlify- og GitHub-siden kan være med i det samme spil, fordi PeerJS-id'erne er fælles.

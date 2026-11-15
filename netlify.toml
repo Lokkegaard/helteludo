@@ -1,4 +1,8 @@
 # Netlify: kun selve spillet udgives (index.html sender videre til helteludo.html).
+# Motortesten køres først; fejler den, udgives intet, og den gamle version bliver liggende.
 [build]
-  command = "mkdir -p dist && cp index.html helteludo.html dist/"
+  command = "node tests/motor.js && mkdir -p dist && cp index.html helteludo.html dist/"
   publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
